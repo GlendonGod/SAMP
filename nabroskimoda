@@ -1,0 +1,2162 @@
+
+//========================[INCLUDES]
+
+#include <a_samp>
+#include <a_mysql>
+#include <mxINI>
+#include <streamer>
+#include <foreach>
+#include <zcmd>
+#include <sscanf2>
+
+#include "../Data/Objects.inc"
+#include "../Data/Functions.inc"
+
+//========================[DEFINES]
+
+#define function%0(%1) forward%0(%1);public%0(%1)
+#define ProxDetectorN(%0,%1,%2,%3) ProxDetector(%0,%1,%2,%3,%3,%3,%3,%3) 
+
+#define VERSION "1.0" 
+
+#define MAX_HOUSE 500
+
+//==========================[Dialogs]
+#define DIALOG_TEST 				0
+#define DIALOG_RENAME 				111
+#define DIALOG_REGISTER 			112
+#define DIALOG_LOGIN				113
+#define DIALOG_BUYMOPED				114
+#define DIALOG_MAINMENU				115
+#define DIALOG_COMMANDS				116
+#define DIALOG_PASSPORTS			117
+#define DIALOG_HOUSE_BUY			8
+#define DIALOG_HOUSE_CONFIRM		9
+#define DIALOG_HOUSE_SELL			10
+#define DIALOG_HOUSE_SELL_CONFIRM	11
+#define DIALOG_HOUSE_SELL_PLAYER	12
+#define DIALOG_HOUSE_SELL_PLAYER1	13
+#define DIALOG_HOUSE_SELL_PLAYER2	14
+#define DIALOG_BHOUSE				15
+#define DIALOG_HOUSEMENU			16
+
+#define INVALID_DIALOG_ID	9999
+//==========================[Цвета]
+
+#define COLOR_LIGHTRED 		0xFF6347FF
+#define COLOR_DOCHAT		0x4682B4FF
+#define COLOR_SCHAT			0xF0E68CFF
+#define COLOR_ISPOLZUY 		0x808080FF
+#define COLOR_GREY 0xAFAFAFAA
+#define ROSA                 0xFF66FFAA
+#define BLU_CHIARO           0x00BFFFAA
+#define COLOR_GREY 0xAFAFAFAA
+#define COLOR_GREEN 0x33AA33AA
+#define COLOR_RED 0xFF0000AA
+#define COLOR_YELLOW 0xFFFF00AA
+#define COLOR_WHITE 0xFFFFFFAA
+#define COLOR_PURPLE 		0xC2A2DAFF
+#define COLOR_BLUE 0x0000BBAA
+#define COLOR_LIGHTBLUE 0x33CCFFAA
+#define COLOR_ORANGE 0xFF9900AA
+#define COLOR_LIME 0x10F441AA
+#define COLOR_MAGENTA 0xFF00FFFF
+#define COLOR_NAVY 0x000080AA
+#define COLOR_AQUA 0xFF000000
+#define COLOR_CRIMSON 0xDC143CAA
+#define COLOR_FLBLUE 0x6495EDAA
+#define COLOR_BISQUE 0xFFE4C4AA
+#define COLOR_BLACK 0x000000AA
+#define COLOR_CHARTREUSE 0x7FFF00AA
+#define COLOR_BROWN 0xA52A2AAA
+#define COLOR_CORAL 0xFF7F50AA
+#define COLOR_GOLD 0xB8860BAA
+#define COLOR_GREENYELLOW 0xADFF2FAA
+#define COLOR_INDIGO 0x4B00B0AA
+#define COLOR_IVORY 0xFFFF82AA
+#define COLOR_LAWNGREEN 0x7CFC00AA
+#define COLOR_SEAGREEN 0x20B2AAAA
+#define COLOR_LIMEGREEN 0x32CD32AA //<--- Dark lime
+#define COLOR_MIDNIGHTBLUE 0X191970AA
+#define COLOR_MAROON 0x800000AA
+#define COLOR_OLIVE 0x808000AA
+#define COLOR_ORANGERED 0xFF4500AA
+#define COLOR_PINK 0xFFC0CBAA // - Light light pink
+#define COLOR_SPRINGGREEN 0x00FF7FAA
+#define COLOR_TOMATO 0xFF6347AA // - Tomato >:/ sounds wrong lol... well... :P
+#define COLOR_YELLOWGREEN 0x9ACD32AA //- like military green
+#define COLOR_MEDIUMAQUA 0x83BFBFAA
+#define COLOR_MEDIUMMAGENTA 0x8B008BAA // dark magenta ^^
+
+//=====================[MYSQL R9-32]
+#define MYSQL_HOST                "127.0.0.1"  
+#define MYSQL_USER                "root"  
+#define MYSQL_DATABASE            "bd"  
+#define MYSQL_PASSWORD            ""  
+#define MYSQL_CONNECT_INFO        MYSQL_HOST,MYSQL_USER,MYSQL_DATABASE,MYSQL_PASSWORD  
+
+new mysql_connect_ID;
+
+//====================[Переменные]
+new RenameTimer[MAX_PLAYERS];
+new RegisterState[MAX_PLAYERS];
+new PassportState[MAX_PLAYERS];
+new PassRegSex[MAX_PLAYERS];
+new ChangeSkinReg[MAX_PLAYERS];
+new Test[MAX_PLAYERS];
+new bool:Logged[MAX_PLAYERS];
+new bool:Passport[MAX_PLAYERS];
+new supercam[MAX_PLAYERS]; 
+new Camera[MAX_PLAYERS] = 0; 
+new Float:CameraX[MAX_PLAYERS] = 1460.0; 
+new Float:CameraY[MAX_PLAYERS] = -1324.0; 
+new Float:CameraZ[MAX_PLAYERS] = 287.2;
+
+new bool: BuyMoped[MAX_PLAYERS];  
+new MopedTime[MAX_PLAYERS];
+
+new PlayerTimer[MAX_PLAYERS];
+new MopedPlayer[MAX_PLAYERS];
+new SpawnCars[2];
+
+
+new RedHouse[MAX_PLAYERS], tempINT[MAX_PLAYERS] = 0, inet[MAX_PLAYERS], carhouse[MAX_PLAYERS];//Переменные для домов. Создание 
+new PlayerIDS[MAX_PLAYERS], TWOPlayer[MAX_PLAYERS];//Переменные для хранения ИД игрока 
+new playercar[MAX_PLAYERS];//Личная машина игрока  
+
+//===============[Пикапы]
+
+new spawnin, spawnout;
+new SpawnBuyCar;
+new heart[3];
+new givepass;
+new meria[7];
+new buyhouse;
+//=================[Textdraws]
+new PlayerText:RegisterSkin[MAX_PLAYERS][5];
+
+new MailSkins[][] = 
+{
+	{
+		0
+	},
+	
+	{
+		0, 72, 73, 48, 96
+	},
+	
+	{
+		0, 25, 67, 183, 222
+	}
+};
+
+new GirlSkins[][] =
+{
+	{
+		0
+	},
+	
+	{
+		0, 93, 90
+	},
+	
+	{
+		0, 69, 215
+	}
+};
+
+//Координаты интерьеров домов 
+new Float:TPtoINT[10][4] = { 
+{223.08000183105, 1287.4799804688, 1081.6390380859, 1.0}, 
+{2365.2189941406, -1135.3070068359, 1050.3740234375, 8.0}, 
+{2196.4260253906, -1204.2110595703, 1048.5219726563, 6.0}, 
+{2270.1569824219, -1210.5240478516, 1047.0610351563, 10.0}, 
+{2237.5061035156, -1081.1059570313, 1048.5219726563, 2.0}, 
+{2317.79296875, -1026.458984375, 1049.7159423828, 9.0}, 
+{261.03601074219, 1284.8260498047, 1079.7559814453, 4.0}, 
+{140.28100585938, 1366.4649658203, 1083.3580322266, 5.0}, 
+{83.00700378418, 1322.7110595703, 1083.3649902344, 9.0}, 
+{-260.75500488281, 1456.6889648438, 1083.8659667969, 4.0} 
+};  
+
+enum HouseInfo 
+{ 
+    hID, 
+    hName[24], 
+    hCuplen, 
+    Float:hPosV[3], 
+    Float:hPosE[3], 
+    Float:hPosVe[4], 
+    hCena, 
+    hLock, 
+    hClass, 
+    hInt, 
+    hIcons, 
+    hPicka, 
+    Text3D:hText 
+}; 
+new hInfo[MAX_HOUSE][HouseInfo]; 
+new LoadAllHouse; 
+
+enum timerserver
+{
+	tSecond,
+	tMinute,
+	tHour
+};
+new Timer[MAX_PLAYERS][timerserver];
+
+enum psInfo
+{
+	psSeria,
+	psNumber,
+	psSex,
+	psDate[3],
+	psDateBirth[3],
+	psCity,
+}
+
+new PassInfo[MAX_PLAYERS][psInfo];
+
+enum playerinfo
+{
+	aName[24],
+	aPassword[30],
+	aSex,
+	aColor,
+	aSkin,
+	aLevel,
+	aExp,
+	aMoney,
+	aHouseKey,
+	aSpawnChange
+};
+new pInfo[MAX_PLAYERS][playerinfo];
+
+main()
+{
+	print("\n----------------------------------");
+	print(" Loading version: "VERSION"");
+	print("----------------------------------\n");
+}
+
+
+public OnGameModeInit()
+{
+	SetGameModeText("RolePlay "VERSION"");
+	DisableInteriorEnterExits();
+	
+	MysqlConnect();
+	
+	ObjectLoad();
+	if(!ObjectLoad())
+	{
+		printf("Обьекты не загружены.");
+	}
+	else printf("Обьекты загружены.");
+	CreateVehicleGame();
+	PickupsCreate();
+	SetTimer("PayDay", 10000, true);
+	
+	return 1;
+}
+
+public OnGameModeExit()
+{
+	foreach(Player,i)
+	{
+		if(Logged[i])
+		{
+			SaveAccount(i);
+			printf("Аккаунты сохранены");
+		}
+	}
+	//KillTimer(supercam);
+	return 1;
+}
+
+public OnPlayerRequestClass(playerid, classid)
+{
+    SetSpawnInfo(playerid,0,0,0,0,0,0,0,0,0,0,0,0);
+    return SpawnPlayer(playerid);
+}  
+
+public OnPlayerConnect(playerid)
+{
+	TogglePlayerSpectating(playerid, 1);
+	NullVars(playerid);
+	Camera[playerid] = 1;
+	supercam[playerid] = SetTimerEx("ActionCamera", 10, 1, "i", playerid);
+	new query[76];
+	format(query, sizeof(query), "SELECT * FROM `accounts` WHERE `Name` = '%s'", PlayerName(playerid));  
+	mysql_function_query(mysql_connect_ID, query, true, "FindPlayerInTable","i", playerid);
+	
+	return 1;
+}
+
+public OnPlayerDisconnect(playerid, reason)
+{
+	KillTimer(PlayerTimer[playerid]);
+	if(Logged[playerid])
+	{
+		SaveAccount(playerid);
+	}
+	return 1;
+}
+
+public OnPlayerSpawn(playerid)
+{
+	TogglePlayerSpectating(playerid, 0);  
+	SetPlayerSpawn(playerid);
+	return 1;
+}
+
+public OnPlayerDeath(playerid, killerid, reason)
+{
+	return 1;
+}
+
+public OnVehicleSpawn(vehicleid)
+{
+	return 1;
+}
+
+public OnVehicleDeath(vehicleid, killerid)
+{
+	return 1;
+}
+
+public OnPlayerText(playerid, text[])
+{
+	new string[184];
+	format(string, sizeof(string), "%s[%d]: %s", pInfo[playerid][aName], playerid, text);
+	ProxDetectorN(20, playerid, string, -1);
+	return false;
+}
+
+public OnPlayerCommandText(playerid, cmdtext[])
+{
+	if (strcmp("/mycommand", cmdtext, true, 10) == 0)
+	{
+		new Float:x, Float:y, Float:z;
+		GetPlayerCameraPos(playerid, x, y, z);
+		new str[128];
+		format(str, sizeof(str), "%f, %f, %f", x, y, z);
+		SendClientMessage(playerid, -1, str);
+		return 1;
+	}
+	return 0;
+}
+
+public OnPlayerEnterVehicle(playerid, vehicleid, ispassenger)
+{
+	return 1;
+}
+
+public OnPlayerExitVehicle(playerid, vehicleid)
+{
+	return 1;
+}
+
+public OnPlayerStateChange(playerid, newstate, oldstate)
+{
+	new carid = GetPlayerVehicleID(playerid);
+	CheckEnterCar(playerid, carid);
+	return 1;
+}
+
+public OnPlayerEnterCheckpoint(playerid)
+{
+	return 1;
+}
+
+public OnPlayerLeaveCheckpoint(playerid)
+{
+	return 1;
+}
+
+public OnPlayerEnterRaceCheckpoint(playerid)
+{
+	return 1;
+}
+
+public OnPlayerLeaveRaceCheckpoint(playerid)
+{
+	return 1;
+}
+
+public OnRconCommand(cmd[])
+{
+	return 1;
+}
+
+public OnPlayerRequestSpawn(playerid)
+{
+	return 1;
+}
+
+public OnObjectMoved(objectid)
+{
+	return 1;
+}
+
+public OnPlayerObjectMoved(playerid, objectid)
+{
+	return 1;
+}
+
+public OnPlayerPickUpPickup(playerid, pickupid)
+{
+	if(pickupid == heart[1] || pickupid == heart[2])
+	{
+		if(pInfo[playerid][aLevel] > 3) return SendClientMessage(playerid, COLOR_GREY, "Только для игроков ниже 3 уровня.");
+		SetPlayerHealth(playerid, 70);
+	}
+	if(pickupid == heart[0])
+    {
+		if(pInfo[playerid][aLevel] > 1) return SendClientMessage(playerid, COLOR_GREY, "Только для игроков 1 уровня.");
+        SetPlayerHealth(playerid, 100);
+    }
+	
+	else if(pickupid == spawnin)
+	{
+		SetPlayerInterior(playerid, 0);
+		SetPlayerPos(playerid, 1742.5999,-1894.8000,2927.6999);
+		SetPlayerFacingAngle(playerid, 358.7233);
+		SetCameraBehindPlayer(playerid);
+		SetPlayerVirtualWorld(playerid, 0);
+	}
+	
+	else if(pickupid == spawnout)
+	{
+		SetPlayerInterior(playerid, 0);
+		SetPlayerPos(playerid, 1755.8474,-1894.0898,13.5565);
+		SetPlayerFacingAngle(playerid, 276.6525);
+		SetCameraBehindPlayer(playerid);
+		SetPlayerVirtualWorld(playerid, 0);
+	}
+	
+	else if(pickupid == SpawnBuyCar)
+	{
+		ShowPlayerDialog(playerid, DIALOG_BUYMOPED, DIALOG_STYLE_MSGBOX, "Аренда мопеда", "Стоимость:{9ACD32}10$", "Купить", "Отмена");
+	}
+	
+	else if(pickupid == givepass)
+	{
+		if(!Passport[playerid])
+		{
+			return ReceivingPassport(playerid, PassportState[playerid] = 1);
+		}
+		SendClientMessage(playerid, COLOR_GREY, "Вы уже получили паспорт.");
+	}
+	
+	else if(pickupid == meria[0])
+	{
+		SetPlayerInterior(playerid, 1);
+		SetPlayerPos(playerid, 1489.6999,-23.1000,1003.7000);
+		SetPlayerVirtualWorld(playerid, 0);
+		SetPlayerFacingAngle(playerid, 271.5096);
+		SetCameraBehindPlayer(playerid);
+	}
+	
+	else if(pickupid == meria[1] || pickupid == meria[2])
+	{
+		SetPlayerInterior(playerid, 0);
+		SetPlayerVirtualWorld(playerid, 0);
+		SetPlayerPos(playerid, 1480.7954,-1767.6123,18.7958);
+		SetPlayerFacingAngle(playerid, 5.0522);
+		SetCameraBehindPlayer(playerid);
+	}
+	
+	else if(pickupid == meria[3])
+	{
+		SetPlayerInterior(playerid, 0);
+		SetPlayerVirtualWorld(playerid, 0);
+		SetPlayerPos(playerid, 1410.5663,-1790.7634,13.8805);
+		SetPlayerFacingAngle(playerid, 92.9335);
+		SetCameraBehindPlayer(playerid);
+	}
+	
+	else if(pickupid == meria[4])
+	{
+		SetPlayerInterior(playerid, 1);
+		SetPlayerVirtualWorld(playerid, 0);
+		SetPlayerPos(playerid, 1523.3000,-31.1240,1003.7000);
+		SetPlayerFacingAngle(playerid, 92.9335);
+		SetCameraBehindPlayer(playerid);
+	}
+	
+	else if(pickupid == meria[5])
+	{
+		SetPlayerInterior(playerid, 0);
+		SetPlayerVirtualWorld(playerid, 0);
+		SetPlayerPos(playerid, 1462.8489,-1776.3289,33.43000);
+		SetPlayerFacingAngle(playerid, 92.9335);
+		SetCameraBehindPlayer(playerid);
+	}
+	
+	else if(pickupid == meria[6])
+	{
+		SetPlayerInterior(playerid, 1);
+		SetPlayerVirtualWorld(playerid, 0);
+		SetPlayerPos(playerid, 1511.2487,-15.7772,1003.6862);
+		SetPlayerFacingAngle(playerid, 169.9886);
+		SetCameraBehindPlayer(playerid);
+	}
+	
+	else if(pickupid == buyhouse)
+	{
+		if(!Passport[playerid]) return SendClientMessage(playerid, COLOR_GREY, "У вас нет паспорта. Его можно получить в Мэрии.");
+		new string[64];
+		format(string, sizeof(string), "[1] {00FF00}Покупка дома\n[2] {FF0000}Продажа дома");
+		ShowPlayerDialog(playerid, DIALOG_BHOUSE, DIALOG_STYLE_LIST, "Недвижимость", string, "Готово", "Выход");
+	}
+	return 1;
+}
+
+public OnVehicleMod(playerid, vehicleid, componentid)
+{
+	return 1;
+}
+
+public OnVehiclePaintjob(playerid, vehicleid, paintjobid)
+{
+	return 1;
+}
+
+public OnVehicleRespray(playerid, vehicleid, color1, color2)
+{
+	return 1;
+}
+
+public OnPlayerSelectedMenuRow(playerid, row)
+{
+	return 1;
+}
+
+public OnPlayerExitedMenu(playerid)
+{
+	return 1;
+}
+
+public OnPlayerInteriorChange(playerid, newinteriorid, oldinteriorid)
+{
+	return 1;
+}
+
+public OnPlayerKeyStateChange(playerid, newkeys, oldkeys)
+{
+	if(newkeys == KEY_YES) 
+    { 
+        if(RedHouse[playerid] == 1) 
+        { 
+			new zapros[512];
+            SetPlayerPos(playerid, hInfo[GetPVarInt(playerid, "houseid")][hPosV][0], hInfo[GetPVarInt(playerid, "houseid")][hPosV][1], hInfo[GetPVarInt(playerid, "houseid")][hPosV][2]); 
+            SetPlayerInterior(playerid, 0); 
+            SetPlayerVirtualWorld(playerid, 0); 
+            RedHouse[playerid] = 0; 
+             
+            mysql_format(mysql_connect_ID, zapros, sizeof(zapros), "INSERT INTO `house` (`name`, `pos1`, `pos2`, `pos3`, `pose1`, `pose2`, `pose3`, `poscar1`, `poscar2`, `poscar3`, `poscar4`, `cena`, `class`, `int`) VALUES ('The State', '%f', '%f', '%f', '%f', '%f', '%f', '%f', '%f', '%f', '%f', '%i', '%i', '%i')", 
+            hInfo[GetPVarInt(playerid, "houseid")][hPosV][0], 
+            hInfo[GetPVarInt(playerid, "houseid")][hPosV][1], 
+            hInfo[GetPVarInt(playerid, "houseid")][hPosV][2], 
+            TPtoINT[tempINT[playerid]][0], 
+            TPtoINT[tempINT[playerid]][1], 
+            TPtoINT[tempINT[playerid]][2], 
+            hInfo[GetPVarInt(playerid, "houseid")][hPosVe][0], 
+            hInfo[GetPVarInt(playerid, "houseid")][hPosVe][1], 
+            hInfo[GetPVarInt(playerid, "houseid")][hPosVe][2], 
+            hInfo[GetPVarInt(playerid, "houseid")][hPosVe][3], 
+            hInfo[GetPVarInt(playerid, "houseid")][hCena], 
+            hInfo[GetPVarInt(playerid, "houseid")][hClass], 
+            inet[playerid] 
+            ); 
+            mysql_function_query(mysql_connect_ID, zapros, false, "", ""); 
+            mysql_function_query(mysql_connect_ID,"SELECT * FROM `house`",true,"HouseLoad",""); 
+        } 
+    } 
+    if(newkeys == 4) 
+    { 
+        if(RedHouse[playerid] == 1) 
+        { 
+            if(tempINT[playerid] >= 9) tempINT[playerid] = 0; 
+            tempINT[playerid]++; 
+            inet[playerid] = floatround(TPtoINT[tempINT[playerid]][3]); 
+            SetPlayerPos(playerid, TPtoINT[tempINT[playerid]][0], TPtoINT[tempINT[playerid]][1], TPtoINT[tempINT[playerid]][2]); 
+            SetPlayerInterior(playerid, inet[playerid]); 
+        } 
+    } 
+    if(newkeys == KEY_JUMP) 
+    { 
+        if(RedHouse[playerid] == 1) 
+        { 
+            if(tempINT[playerid] < 0) tempINT[playerid] = 10; 
+            tempINT[playerid]--; 
+            inet[playerid] = floatround(TPtoINT[tempINT[playerid]][3]); 
+            SetPlayerPos(playerid, TPtoINT[tempINT[playerid]][0], TPtoINT[tempINT[playerid]][1], TPtoINT[tempINT[playerid]][2]); 
+            SetPlayerInterior(playerid, inet[playerid]); 
+        } 
+    }
+    if(newkeys == KEY_WALK) 
+    { 
+        for(new i; i <= LoadAllHouse; i++) 
+        { 
+            if(IsPlayerInRangeOfPoint(playerid,2.0,hInfo[i][hPosV][0],hInfo[i][hPosV][1],hInfo[i][hPosV][2])) 
+            { 
+                if(hInfo[i][hLock] != 0) return SendClientMessage(playerid, -1, "Дом закрыт! (/hinfo что бы узнать информацию о доме)"); 
+                SetPlayerPos(playerid, hInfo[i][hPosE][0],hInfo[i][hPosE][1],hInfo[i][hPosE][2]); 
+                SetPlayerInterior(playerid, hInfo[i][hInt]); 
+                SetPlayerVirtualWorld(playerid, hInfo[i][hID]); 
+            } 
+            else if(IsPlayerInRangeOfPoint(playerid,2.0,hInfo[i][hPosE][0],hInfo[i][hPosE][1],hInfo[i][hPosE][2])) 
+            { 
+                if(hInfo[i][hLock] != 0) return SendClientMessage(playerid, -1, "Дом закрыт!"); 
+                SetPlayerPos(playerid, hInfo[i][hPosV][0],hInfo[i][hPosV][1],hInfo[i][hPosV][2]); 
+                SetPlayerInterior(playerid, 0); 
+                SetPlayerVirtualWorld(playerid, 0); 
+            } 
+        }  
+	} 
+	return 1;
+}
+
+public OnRconLoginAttempt(ip[], password[], success)
+{
+	return 1;
+}
+
+public OnPlayerUpdate(playerid)
+{
+	return 1;
+}
+
+public OnPlayerStreamIn(playerid, forplayerid)
+{
+	return 1;
+}
+
+public OnPlayerStreamOut(playerid, forplayerid)
+{
+	return 1;
+}
+
+public OnVehicleStreamIn(vehicleid, forplayerid)
+{
+	return 1;
+}
+
+public OnVehicleStreamOut(vehicleid, forplayerid)
+{
+	return 1;
+}
+
+public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
+{
+	switch(dialogid)
+	{
+		case DIALOG_RENAME:
+		{
+			if(!response) return a_Kick(playerid, "Смена ника");
+			if(response)
+			{
+				if(strlen(inputtext) < 4 || strlen(inputtext) > 24) return ShowPlayerDialog(playerid, DIALOG_RENAME, DIALOG_STYLE_INPUT, "Введите новый ник","{FFFFFF}Ваш ник не соответствует правилам сервера\nВведите новый ник в окошко и нажмите {9ACD32}Далее\nПример: {9ACD32}Carl_Johnson","Далее","Выход");
+				if(!IsRPNick(inputtext)) return ShowPlayerDialog(playerid, DIALOG_RENAME, DIALOG_STYLE_INPUT, "Введите новый ник","{FFFFFF}Ваш ник не соответствует правилам сервера\nВведите новый ник в окошко и нажмите {9ACD32}Далее\nПример: {9ACD32}Carl_Johnson","Далее","Выход");
+				new query[76];
+				format(query, sizeof(query), "SELECT * FROM `accounts` WHERE `Name` = '%s'", inputtext);  
+				mysql_function_query(mysql_connect_ID, query, true, "CheckName","is", playerid, inputtext); 
+			}
+		}
+		
+		case DIALOG_REGISTER:
+		{
+			if(!response)
+	        {
+	            RegisterState[playerid] --;
+	            if(RegisterState[playerid] == 0)
+	            {
+					a_Kick(playerid, "Регистрация");
+				}
+				else return ShowRegisterDialog(playerid,RegisterState[playerid]);
+	        }
+			if(response)
+			{
+				PlayerPlaySound(playerid, 1136, 0.0, 0.0, 0.0);
+				switch(RegisterState[playerid])
+				{
+					case 1:
+					{
+						if(strlen(inputtext) < 6 || strlen(inputtext) > 30)
+					    {
+					        PlayerPlaySound(playerid, 1052, 0.0, 0.0, 0.0);
+							return ShowRegisterDialog(playerid,RegisterState[playerid]);
+						}
+						else if(!CheckPassword(inputtext))
+						{
+							PlayerPlaySound(playerid, 1052, 0.0, 0.0, 0.0);
+						    return ShowRegisterDialog(playerid,RegisterState[playerid]);
+						}
+						RegisterState[playerid] ++;
+						strmid(pInfo[playerid][aPassword], inputtext, 0, strlen(inputtext), 30);
+						ShowRegisterDialog(playerid,RegisterState[playerid]);
+					}
+					case 2:
+					{
+						pInfo[playerid][aSex] = listitem+1;
+						RegisterState[playerid] ++;
+						ShowRegisterDialog(playerid,RegisterState[playerid]);
+						 
+					}
+					case 3:
+					{
+						pInfo[playerid][aColor] = listitem+1;
+						RegisterState[playerid] ++;
+						ShowRegisterDialog(playerid,RegisterState[playerid]);
+					}
+					case 4:
+					{
+						new Info[30];
+				        switch(listitem)
+				        {
+				            case 0: Info = "Вкладка 'Hosted'";
+				            case 1:
+							{
+							    Info = "От друзей";
+							    RegisterState[playerid] = 5;
+								ShowRegisterDialog(playerid,RegisterState[playerid]);
+							}
+							case 2: Info = "На порталах";
+							case 3: Info = "В поисковике";
+							case 4: Info = "Другое";
+				        }
+						new string[64];
+				        format(string, sizeof(string), "%s - %s", pInfo[playerid][aName],Info);
+				    	WriteLog("RegisterInfo.log",string);
+						if(listitem != 1)
+						{
+							Camera[playerid] = 0;
+							KillTimer(supercam[playerid]);
+							RegisterState[playerid] = 0;
+							RegisterSkinPlayer(playerid);
+							//SpawnPlayer(playerid);
+						}
+					}
+					case 5:
+					{
+						Camera[playerid] = 0;
+						SendClientMessage(playerid, -1, "В разработке");
+						KillTimer(supercam[playerid]);
+						RegisterState[playerid] = 0;
+						RegisterSkinPlayer(playerid);
+					}
+				}
+			}
+		}
+		
+		case DIALOG_LOGIN:
+		{
+			if(!response)
+			{
+				a_Kick(playerid, "Выход");
+			}
+			if(response)
+			{
+				if(strlen(inputtext) < 6 || strlen(inputtext) > 30)
+				{
+					PlayerPlaySound(playerid, 1052, 0.0, 0.0, 0.0);
+					return ShowLoginDialog(playerid);
+				}
+				else if(!CheckPassword(inputtext))
+				{
+					PlayerPlaySound(playerid, 1052, 0.0, 0.0, 0.0);
+					return ShowLoginDialog(playerid);
+				}
+				TogglePlayerSpectating(playerid, true);
+				
+				new query[76];
+				format(query, sizeof(query), "SELECT * FROM `accounts` WHERE `Name` = '%s'", PlayerName(playerid));  
+				mysql_function_query(mysql_connect_ID, query, true, "LoginPlayer","is", playerid, inputtext); 
+			}
+		}
+		
+		case DIALOG_BUYMOPED:
+		{
+			if(response)
+			{
+				if(pInfo[playerid][aMoney] < 10) return SendClientMessage(playerid, COLOR_GREY, "Недостаточно денег.");
+				if(MopedPlayer[playerid] >= 1) return SendClientMessage(playerid, COLOR_GREY, "Вы уже арендовали мопед.");
+				MopedPlayer[playerid] = CreateVehicle(462, 1794.2544,-1928.5129,13.3884, 0, 1, 1, 601);
+				MopedTime[playerid] = 10;
+				BuyMoped[playerid] = true;
+				pInfo[playerid][aMoney] -= 10;
+				ReloadPlayerMoney(playerid);
+				PutPlayerInVehicle(playerid, MopedPlayer[playerid], 0);
+				SendClientMessage(playerid, COLOR_GREEN, "Вы успешно арендовали мопед на 10 минут.");
+			}
+		}
+		
+		case DIALOG_MAINMENU:
+		{
+			if(response)
+			{
+				switch(listitem)
+				{
+					case 0: SendClientMessage(playerid, -1, "В разработке");
+					case 1: ShowPlayerDialog(playerid, DIALOG_COMMANDS, DIALOG_STYLE_LIST, "Команды", "[0] Чат\n[1] Игрок\n[2] Дом", "Готово", "Назад");
+				}
+			}
+		}
+	
+		case DIALOG_COMMANDS:
+		{
+			if(!response) return cmd_menu(playerid);
+			switch(listitem)
+			{
+				case 0: ShowPlayerDialog(playerid, DIALOG_COMMANDS, DIALOG_STYLE_MSGBOX, "Чат", "1. /me - выполнение действия.\n2. /s - крикнуть.\n3. /try\n4. /do", "Готово", "Назад");
+				case 1: ShowPlayerDialog(playerid, DIALOG_COMMANDS, DIALOG_STYLE_MSGBOX, "Игрок", "1. /showpass - показать паспорт", "Готово", "Назад");
+				case 2: ShowPlayerDialog(playerid, DIALOG_COMMANDS, DIALOG_STYLE_MSGBOX, "Дом", "1. /hlock - закрыть дом\n2. /hmenu - меню дома", "Готово", "Назад");
+			}
+		}
+		
+		case DIALOG_PASSPORTS:
+		{
+			if(!response)
+			{
+				PassportState[playerid] --;
+				if(PassportState[playerid] < 1) return SendClientMessage(playerid, COLOR_GREY, "Попробуйте получить паспорт позже");
+				return ReceivingPassport(playerid, PassportState[playerid]);
+			}
+			if(response)
+			{
+				PlayerPlaySound(playerid, 1136, 0.0, 0.0, 0.0);
+				switch(PassportState[playerid])
+				{
+					case 1:
+					{
+						PassRegSex[playerid] = listitem + 1;
+						ReceivingPassport(playerid, PassportState[playerid] = 2);
+					}
+					case 2:
+					{
+						new day,month,year,day2,month2,year2;
+						getdate(year, month, day);
+						if(sscanf(inputtext, "p</>iii", day2, month2, year2))
+						{
+							PlayerPlaySound(playerid, 1052, 0.0, 0.0, 0.0);
+							return ReceivingPassport(playerid, PassportState[playerid]);
+						}
+						new check = year - year2;
+						if( check > 50 || check < 1 || day2 > GetMonthDays(year2, month2) || day2 < 1 || month2 > 12 || month2 < 1 )
+						{
+							PlayerPlaySound(playerid, 1052, 0.0, 0.0, 0.0);
+							return ReceivingPassport(playerid, PassportState[playerid]);
+						}
+						if(month2 > month || (month2 == month && day2 > day) )
+						{
+							check --;
+						}
+
+						new city = GetPlayerVirtualWorld(playerid) + 1;
+						if(city < 1) city = 1;
+						else if(city > 3) city = 3;
+
+						PassInfo[playerid][psDateBirth][0] = day2;
+						PassInfo[playerid][psDateBirth][1] = month2;
+						PassInfo[playerid][psDateBirth][2] = year2;
+						PassInfo[playerid][psDate][0] = day;
+						PassInfo[playerid][psDate][1] = month;
+						PassInfo[playerid][psDate][2] = year;
+						PassInfo[playerid][psCity] = city;
+						PassInfo[playerid][psSex] = PassRegSex[playerid];
+						PassInfo[playerid][psNumber] = 100000 + random(900000);
+						PassInfo[playerid][psSeria] = 1000 + random(9000);
+						OnRegPass(playerid);
+						PassportState[playerid] = 0;
+						new Sex[10], str[70], allstr[500];
+						switch(PassRegSex[playerid])
+						{
+							case 0: Sex = "None";
+							case 1: Sex = "Мужчина";
+							case 2: Sex = "Женщина";
+						}
+						strcat(allstr,"\t{FFFFFF}Держите ваш паспорт!\n\n");
+						format(str,sizeof(str),"Имя: %s\n", PlayerName(playerid));
+						strcat(allstr,str);
+						format(str,sizeof(str),"Пол: %s\n", Sex);
+						strcat(allstr,str);
+						format(str,sizeof(str),"Дата рождения: %02d/%02d/%02d\n",day2, month2, year2);
+						strcat(allstr,str);
+						format(str,sizeof(str),"Город: %s\n", CityName(PassInfo[playerid][psCity]));
+						strcat(allstr,str);
+						format(str,sizeof(str),"Серия: %d\n",PassInfo[playerid][psSeria]);
+						strcat(allstr,str);
+						format(str,sizeof(str),"Номер: %d\n",PassInfo[playerid][psNumber]);
+						strcat(allstr,str);
+						format(str,sizeof(str),"Дата выдачи: %d/%d/%d",day, month, year);
+						strcat(allstr,str);
+						ShowPlayerDialog(playerid, DIALOG_PASSPORTS, DIALOG_STYLE_MSGBOX, "[3/3] Готово", allstr, "Готово", "");
+					}
+				}
+			}
+		}
+		case DIALOG_HOUSE_BUY: 
+        { 
+            if(response) 
+            { 
+                SetPVarInt(playerid, "houseid", strval(inputtext)); 
+                if(GetPVarInt(playerid, "houseid") >= LoadAllHouse) return SendClientMessage(playerid, -1, "Такого дома не существует!"); 
+                new string[256], cuple[23], stat[26], clas[13]; 
+                if(hInfo[GetPVarInt(playerid, "houseid")][hLock] == 0) cuple = "{008000}Открыт{FFFFFF}"; 
+                else cuple = "{FF0000}Закрыт{FFFFFF}"; 
+                if(hInfo[GetPVarInt(playerid, "houseid")][hCuplen] == 0) stat = "{008000}Продается{FFFFFF}"; 
+                else stat = "{FF0000}Куплен{FFFFFF}"; 
+                switch(hInfo[GetPVarInt(playerid, "houseid")][hClass]) 
+                { 
+                    case 0: clas = "Эконом класс";
+					case 1: clas = "Бизнес класс";
+					case 2: clas = "Элитный";
+					case 3: clas = "VIP"; 
+                } 
+                format(string, 256, "{FFFFFF}Номер дома: %d\nСтатус дома: %s\nСостояние дома: %s\nКласс дома: %s\n\nЦена дома: %d", GetPVarInt(playerid, "houseid"), stat, cuple, clas, hInfo[GetPVarInt(playerid, "houseid")][hCena]); 
+                ShowPlayerDialog(playerid, DIALOG_HOUSE_CONFIRM, DIALOG_STYLE_LIST, "Информация о доме", string, "Купить", "Отмена"); 
+            } 
+        } 
+        case DIALOG_HOUSE_CONFIRM: 
+        { 
+            if(response) 
+            { 
+                if(pInfo[playerid][aHouseKey] != -1) return SendClientMessage(playerid, -1, "У вас уже есть дом!"); 
+                if(pInfo[playerid][aMoney] < hInfo[GetPVarInt(playerid, "houseid")][hCena]) return SendClientMessage(playerid, -1, "У вас недостаточно денег для покупки дома!"); 
+                if(hInfo[GetPVarInt(playerid, "houseid")][hCuplen] != 0) return SendClientMessage(playerid, -1, "Этот дом уже куплен!"); 
+                pInfo[playerid][aHouseKey] = GetPVarInt(playerid, "houseid"); 
+                pInfo[playerid][aMoney] -= hInfo[GetPVarInt(playerid, "houseid")][hCena]; 
+				ReloadPlayerMoney(playerid);
+                hInfo[GetPVarInt(playerid, "houseid")][hCuplen] = 1; 
+                strmid(hInfo[GetPVarInt(playerid, "houseid")][hName], PlayerName(playerid), 0, strlen(PlayerName(playerid)), 255); 
+                SendClientMessage(playerid, -1, "Поздравляем вас с покупкой дома!"); 
+                SaveHouse(GetPVarInt(playerid, "houseid")); 
+                UpdateHouse(); 
+            } 
+        } 
+		case DIALOG_HOUSE_SELL: 
+        { 
+            if(response) 
+            { 
+                switch(listitem) 
+                { 
+                    case 0: 
+                    { 
+                        new string[180], cena; 
+                        cena = (hInfo[pInfo[playerid][aHouseKey]][hCena]/100)*30; 
+                        format(string, 180, "Государство может купить у вас ваш дом.\nОднако на 30 процентов дешевле от гос. цены\nГос. цена вашего дома: %d\n\nГосударство купит у вас дом за: %d долларов.\nВы согласны?",hInfo[pInfo[playerid][aHouseKey]][hCena], hInfo[pInfo[playerid][aHouseKey]][hCena] - cena); 
+                        ShowPlayerDialog(playerid, DIALOG_HOUSE_SELL_CONFIRM, DIALOG_STYLE_MSGBOX, "Продажа дома", string, "Согласен","Отмена"); 
+                    } 
+                    case 1: 
+                    { 
+                        ShowPlayerDialog(playerid, DIALOG_HOUSE_SELL_PLAYER, DIALOG_STYLE_INPUT, "Продажа дома","Введите ID игрока которому хотите продать дом:","Ввод","Отмена"); 
+                    } 
+                } 
+            } 
+        } 
+        case DIALOG_HOUSE_SELL_CONFIRM: 
+        { 
+            if(response) 
+            { 
+                new cena = (hInfo[pInfo[playerid][aHouseKey]][hCena]/100)*30; 
+                strmid(hInfo[pInfo[playerid][aHouseKey]][hName], "The State", 0, 10, 255); 
+                hInfo[pInfo[playerid][aHouseKey]][hCuplen] = 0; 
+                pInfo[playerid][aMoney] += hInfo[pInfo[playerid][aHouseKey]][hCena] - cena;
+				ReloadPlayerMoney(playerid);
+                pInfo[playerid][aSpawnChange] = 0; 
+                SendClientMessage(playerid, -1, "Вы успешно продали свой дом!"); 
+                SaveHouse(pInfo[playerid][aHouseKey]); 
+                UpdateHouse(); 
+                pInfo[playerid][aHouseKey] = -1; 
+            } 
+        } 
+        case DIALOG_HOUSE_SELL_PLAYER: 
+        { 
+            if(response) 
+            { 
+                if(!strlen(inputtext)) return SendClientMessage(playerid, -1, "Вы ничего не ввели!");
+                PlayerIDS[playerid] = strval(inputtext);
+				if(!IsPlayerConnected(PlayerIDS[playerid])) return SendClientMessage(playerid, COLOR_GREY, "Такого игрока нет на сервере.");
+				if(PlayerIDS[playerid] == playerid) return SendClientMessage(playerid, COLOR_GREY, "Вы ввели свой ID.");
+                ShowPlayerDialog(playerid, DIALOG_HOUSE_SELL_PLAYER1, DIALOG_STYLE_INPUT, "Продажа дома","Введите за какую цену вы готовы продать дом:","Ввод","Отмена"); 
+            } 
+        } 
+        case DIALOG_HOUSE_SELL_PLAYER1: 
+        { 
+            if(response) 
+            { 
+                new st[120]; 
+                SetPVarInt(playerid, "CenaH",strval(inputtext)); 
+                TWOPlayer[PlayerIDS[playerid]] = playerid;
+                if(GetPVarInt(playerid, "CenaH") > pInfo[PlayerIDS[playerid]][aMoney]) SendClientMessage(playerid, -1, "У покупателя нет такой суммы."); 
+                if(pInfo[PlayerIDS[playerid]][aHouseKey] != -1) SendClientMessage(playerid, -1, "У покупателя уже есть дом."); 
+                format(st, 120, "%s предлогает вам купить дом.\nЗа %d долларов. Вы согласны?", PlayerName(playerid), GetPVarInt(playerid, "CenaH")); 
+                ShowPlayerDialog(PlayerIDS[playerid], DIALOG_HOUSE_SELL_PLAYER2, DIALOG_STYLE_MSGBOX, "Покупка дома", st, "Купить","Отказ"); 
+            } 
+        } 
+        case DIALOG_HOUSE_SELL_PLAYER2: 
+        { 
+            if(response) 
+            { 
+                pInfo[playerid][aHouseKey] = pInfo[TWOPlayer[playerid]][aHouseKey], pInfo[TWOPlayer[playerid]][aHouseKey] = -1; 
+                pInfo[playerid][aMoney] -= GetPVarInt(TWOPlayer[playerid], "CenaH"), pInfo[TWOPlayer[playerid]][aMoney] += GetPVarInt(TWOPlayer[playerid], "CenaH");
+				ReloadPlayerMoney(TWOPlayer[playerid]);
+				ReloadPlayerMoney(playerid);
+                pInfo[TWOPlayer[playerid]][aSpawnChange] = 0; 
+                SendClientMessage(TWOPlayer[playerid], -1, "Вы успешно продали дом!"); 
+                SendClientMessage(playerid, -1, "Вы успешно купили дом!");
+				new zapros[128];
+				mysql_format(mysql_connect_ID, zapros, sizeof(zapros),"UPDATE `house` SET `name` = '%s' WHERE `id` = '%d'", PlayerName(playerid), pInfo[playerid][aHouseKey]); 
+				mysql_function_query(mysql_connect_ID, zapros, false, "", "");
+				hInfo[pInfo[playerid][aHouseKey]][hName] = PlayerName(playerid);
+                UpdateHouse(); 
+            } 
+            else SendClientMessage(TWOPlayer[playerid], -1, "Покупатель отказался от покупки!"), SendClientMessage(playerid, -1, "Вы отказались от покупки!"); 
+		} 
+		
+		case DIALOG_BHOUSE:
+		{
+			if(!response) return SendClientMessage(playerid, COLOR_GREY, "Попробуйте купить позже");
+			if(response)
+			{
+				switch(listitem)
+				{
+					case 0: ShowPlayerDialog(playerid, DIALOG_HOUSE_BUY, DIALOG_STYLE_INPUT, "Покупка дома", "Здравствуйте! У нас вы можете купить себе недвижемость.\nМы надеемся вы уже присмотрели себе домик?\nЕсли да тогда введите его номер:", "Ввод","Отмена");
+					case 1:
+					{
+						if(pInfo[playerid][aHouseKey] == -1)return SendClientMessage(playerid, -1, "Вам нечего продавать."); 
+						ShowPlayerDialog(playerid, DIALOG_HOUSE_SELL, DIALOG_STYLE_LIST, "Продажа дома", "1. Продать дом Государству\n2. Продать дом игроку","Выбрать","Отмена");
+					}
+				}
+			}
+		}
+		
+		case DIALOG_HOUSEMENU:
+		{
+			if(response)
+			{
+				switch(listitem)
+				{
+					case 0: cmd_hlock(playerid);
+				}
+			}
+		}
+	}
+	return 1;
+}
+
+public OnPlayerClickPlayer(playerid, clickedplayerid, source)
+{
+	return 1;
+}
+
+public OnPlayerClickPlayerTextDraw(playerid, PlayerText:playertextid)
+{
+    if(playertextid == RegisterSkin[playerid][0])
+    {
+		if(pInfo[playerid][aSex] == 1)
+		{
+			ChangeSkinReg[playerid] ++;
+			if(ChangeSkinReg[playerid] > 4) { ChangeSkinReg[playerid] = 1; }
+			return ShowMailSkins(playerid, ChangeSkinReg[playerid]);
+		}
+		else
+		{
+			ChangeSkinReg[playerid] ++;
+			if(ChangeSkinReg[playerid] > 2) { ChangeSkinReg[playerid] = 1; }
+			return ShowGirlSkins(playerid, ChangeSkinReg[playerid]);
+		}
+         
+    }
+	if(playertextid == RegisterSkin[playerid][1])
+    {
+		if(pInfo[playerid][aSex] == 1)
+		{
+			ChangeSkinReg[playerid] --;
+			if(ChangeSkinReg[playerid] <= 0) { ChangeSkinReg[playerid] = 4; }
+			return ShowMailSkins(playerid, ChangeSkinReg[playerid]);
+		}
+		else
+		{
+			ChangeSkinReg[playerid] --;
+			if(ChangeSkinReg[playerid] <= 0) { ChangeSkinReg[playerid] = 2; }
+			return ShowGirlSkins(playerid, ChangeSkinReg[playerid]);
+		}
+         
+    }
+	if(playertextid == RegisterSkin[playerid][2])
+	{
+		if(pInfo[playerid][aSex] == 1)
+		{
+			PlayerTextDrawDestroy(playerid, RegisterSkin[playerid][0]);
+			PlayerTextDrawDestroy(playerid, RegisterSkin[playerid][1]);
+			PlayerTextDrawDestroy(playerid, RegisterSkin[playerid][2]);
+			PlayerTextDrawDestroy(playerid, RegisterSkin[playerid][3]);
+			PlayerTextDrawDestroy(playerid, RegisterSkin[playerid][4]);
+			
+			CancelSelectTextDraw(playerid);
+			pInfo[playerid][aSkin] = ShowMailSkins(playerid, ChangeSkinReg[playerid]);
+			
+			OnPlayerRegister(playerid);
+			SendClientMessage(playerid,COLOR_WHITE,"Благодарим вас за регистрацию на нашем сервере.");
+			SendClientMessage(playerid,COLOR_WHITE,"Сейчас вам желательно добраться до мэрии и получить паспорт.");
+			PlayerTimer[playerid] = SetTimerEx("TimeOnServer", 1000, 1, "i", playerid);
+			TogglePlayerSpectating(playerid, 0);
+			ReloadPlayerMoney(playerid);
+			SetPlayerScore(playerid, pInfo[playerid][aLevel]);
+			Logged[playerid] = true;
+			SpawnPlayer(playerid);
+		}
+		else
+		{
+			PlayerTextDrawDestroy(playerid, RegisterSkin[playerid][0]);
+			PlayerTextDrawDestroy(playerid, RegisterSkin[playerid][1]);
+			PlayerTextDrawDestroy(playerid, RegisterSkin[playerid][2]);
+			PlayerTextDrawDestroy(playerid, RegisterSkin[playerid][3]);
+			PlayerTextDrawDestroy(playerid, RegisterSkin[playerid][4]);
+			
+			CancelSelectTextDraw(playerid);
+			pInfo[playerid][aSkin] = ShowGirlSkins(playerid, ChangeSkinReg[playerid]);
+			
+			OnPlayerRegister(playerid);
+			SendClientMessage(playerid,COLOR_WHITE,"Благодарим вас за регистрацию на нашем сервере.");
+			SendClientMessage(playerid,COLOR_WHITE,"Сейчас вам желательно добраться до мэрии и получить паспорт.");
+			PlayerTimer[playerid] = SetTimerEx("TimeOnServer", 1000, 1, "i", playerid);
+			TogglePlayerSpectating(playerid, 0);
+			ReloadPlayerMoney(playerid);
+			SetPlayerScore(playerid, pInfo[playerid][aLevel]);
+			Logged[playerid] = true;
+			SpawnPlayer(playerid);
+		}
+	}
+    return 1;
+}
+
+//==================[Stocks]
+
+stock PlayerName(playerid)
+{
+	new CName[24];
+	GetPlayerName(playerid, CName, 24);
+ 	return CName;
+}
+
+stock MysqlConnect()
+{
+	mysql_connect_ID = mysql_connect(MYSQL_CONNECT_INFO);  
+	if(mysql_errno()==0)
+	{
+		printf("Подключение к базе успешно");
+		mysql_function_query(mysql_connect_ID, "SELECT * FROM `house`",true,"HouseLoad","");
+	}
+	else return printf("Подключиться к базе не удалось");
+	
+	
+	return true;
+}
+
+stock IsRPNick(plname[])
+{
+        for(new i=0;i<strlen(plname);i++)
+        {
+                if( !((plname[i]>='a'&&plname[i]<='z') || (plname[i]>='A'&&plname[i]<='Z') || plname[i]=='_'))
+                {
+                        return 0; // недопустимые символы в нике
+                }
+        }
+        new d = strfind(plname, "_");
+        if( d==-1 ) return 0; // нет _ в нике
+        if(strfind(plname, "_", false, d+1) != -1) return 0; // больше одного _ в нике
+        new name[10];
+        strmid(name, plname, 0, d, sizeof name);
+        new surname[10];
+        strmid(surname, plname, d+1, strlen(plname), sizeof surname);
+        if(strlen(name)<3 || strlen(name)>9) return 0; // неверная длина имени
+        if(strlen(surname)<3 || strlen(surname)>9) return 0; // неверная длина фамилии
+        if(!(name[0]>='A' && name[0]<='Z')) return 0; // первая буква имени не заглавная
+        if(!(surname[0]>='A' && surname[0]<='Z')) return 0; // первая буква фамилии не заглавная
+        for(new i=1;i<strlen(name);i++)
+        {
+                if(!(name[i]>='a'&&name[i]<='z')) return 0; // неверные буквы в имени
+        }
+        for(new i=1;i<strlen(surname);i++)
+        {
+                if(!(surname[i]>='a'&&surname[i]<='z'))return 0; // неверные буквы в фамилии
+        }
+        return 1;// ok
+}
+
+stock NullVars(playerid)
+{
+	ChangeSkinReg[playerid] 					= 0;
+	pInfo[playerid][aSex] 						= 0;
+	pInfo[playerid][aColor]						= 0;
+	pInfo[playerid][aSkin] 						= 0;
+	pInfo[playerid][aLevel] 					= 0;
+	pInfo[playerid][aExp]						= 0;
+	pInfo[playerid][aMoney] 					= 0;
+	Timer[playerid][tSecond]					= 0;
+	Timer[playerid][tMinute]					= 0;
+	Timer[playerid][tHour]						= 0;
+	MopedTime[playerid] 						= 0;
+	Passport[playerid]							= false;
+	BuyMoped[playerid] 							= false;
+	PassInfo[playerid][psDateBirth][0] 			= 0;
+ 	PassInfo[playerid][psDateBirth][1] 			= 0;
+ 	PassInfo[playerid][psDateBirth][2] 			= 0;
+ 	PassInfo[playerid][psDate][0] 				= 0;
+ 	PassInfo[playerid][psDate][1] 				= 0;
+ 	PassInfo[playerid][psDate][2] 				= 0;
+ 	PassInfo[playerid][psCity] 					= 0;
+	PassportState[playerid]						= 0;
+	PassRegSex[playerid]						= 0;
+	pInfo[playerid][aHouseKey]					= -1;
+	
+	return true;
+}
+
+stock WriteLog(const file[],string[])
+{
+ 	new write[256],minute,second,hour,day,month,year;
+ 	gettime(hour,minute,second);
+ 	getdate(year,month,day);
+ 	format(write, sizeof(write), "[Logs]/%s",file);
+ 	new File:hFile = fopen(write, io_append);
+ 	format(write, sizeof(write), "[%d.%02d.%02d | %02d:%02d:%02d] %s\r\n",day,month,year,hour,minute,second,string);
+ 	for(new i; i < strlen(write); i ++) fputchar(hFile, write[i], false);
+ 	fclose(hFile);
+}
+
+stock a_Kick(playerid, reason[])
+{
+	new string[256];
+	format(string,sizeof(string),"%s[%d] был кикнут с причиной: %s",PlayerName(playerid), playerid, reason);
+	WriteLog("KickLog.log",string);
+	SetTimerEx("PLKick",100,false,"i",playerid);
+	return true;
+}
+
+stock ShowGrandPassRegisterDialog(playerid)
+{
+	new string[300];
+	strcat(string,"Введите пароль.\n");
+	strcat(string,"Он будет использоватьс¤ для авторизации на нашем сервере.\n\n");
+	strcat(string,"{33CCFF}\tпримечания:\n");
+	strcat(string,"\t - Длина ароля от 6 до 30 символов\n");
+	strcat(string,"\t - Пароль должен состоять из букв и цифр\n");
+	strcat(string,"\t - Пароль чувствителен к регистру\n");
+	return ShowPlayerDialog(playerid, DIALOG_REGISTER, DIALOG_STYLE_PASSWORD, "Регистрация", string, "Далее", "Выход");
+}
+
+
+stock ShowRegisterDialog(playerid, rstate)
+{
+	switch(rstate)
+	{
+		case 1: ShowGrandPassRegisterDialog(playerid);
+		case 2: ShowPlayerDialog(playerid, DIALOG_REGISTER, DIALOG_STYLE_LIST, "[1/4] Выберите ваш пол","Мужчина\nЖенщина", "Далее", "Назад");
+		case 3: ShowPlayerDialog(playerid, DIALOG_REGISTER, DIALOG_STYLE_LIST, "[2/4] Выберите цвет кожи","{FFCC99}Светлый\n{A52A2A}Тёмный", "Далее", "Назад");
+		case 4: ShowPlayerDialog(playerid, DIALOG_REGISTER, DIALOG_STYLE_LIST, "[3/4] Откуда вы о нас узнали?","Вкладка 'Hosted'\nОт друзей\nНа порталах/форумах\nВ поисковике\nДругое", "Далее", "Назад");
+	    case 5: ShowPlayerDialog(playerid, DIALOG_REGISTER, DIALOG_STYLE_INPUT, "[4/4] Введите ник пригласившего?","{FFFFFF}Введите ник игрока пригласившего вас.\nПример: {780D0D}Carl_Johnson", "Далее", "Назад");
+        default: return false;
+	}
+	return true;
+}
+
+stock ShowLoginDialog(playerid)
+{
+	new str[100], string[250];
+	format(str,sizeof(str),"{FFFFFF}Добро пожаловать, {B52828}%s{FFFFFF}\n\n",PlayerName(playerid));
+	strcat(string,str);
+	strcat(string,"Этот аккаунт {9ACD32}зарегистрирован{FFFFFF} на нашем сервере.\n");
+	strcat(string,"Введите свой пароль и нажмите {B52828}'Вход'{FFFFFF}\n");
+	ShowPlayerDialog(playerid, DIALOG_LOGIN, DIALOG_STYLE_PASSWORD, "Авторизация", string, "Вход", "Выход");
+	return true;
+}
+
+stock OnPlayerRegister(playerid)
+{
+	new query[1024];
+	format(query, sizeof(query), "INSERT INTO `accounts` (`Name`, `Password`) VALUES ('%s', '%s')", pInfo[playerid][aName], pInfo[playerid][aPassword]);
+	mysql_function_query(mysql_connect_ID, query, false, "", "");
+	SaveAccount(playerid);
+	
+	pInfo[playerid][aLevel] = 1;
+	return true;
+}
+
+stock CheckPassword(pass[])
+{
+	for(new i; i < strlen(pass); i ++)
+	{
+	    if( (pass[i] >= 'a' && pass[i] <= 'z') ||
+		(pass[i] >= 'A' && pass[i] <= 'Z') ||
+		(pass[i] >= 'а' && pass[i] <= 'я') ||
+		(pass[i] >= 'А' && pass[i] <= 'Я') ||
+		(pass[i] >= '0' && pass[i] <= '9')  )
+		{
+		    continue;
+		}
+		else return false;
+	}
+	return true;
+}
+
+stock SetPlayerSpawn(playerid)
+{
+	
+	if(!Logged[playerid]) return a_Kick(playerid, "Авторизация");
+	if(pInfo[playerid][aSex] == 0) return RegisterSkinPlayer(playerid);
+	if(pInfo[playerid][aHouseKey] != -1) 
+{
+SetPlayerSkin(playerid, pInfo[playerid][aSkin]);
+SetPlayerPos(playerid, hInfo[pInfo[playerid][aHouseKey]][hPosE][0], hInfo[pInfo[playerid][aHouseKey]][hPosE][1], hInfo[pInfo[playerid][aHouseKey]][hPosE][2]); 
+        SetPlayerInterior(playerid, hInfo[pInfo[playerid][aHouseKey]][hInt]); 
+        return SetPlayerVirtualWorld(playerid, pInfo[playerid][aHouseKey]); 
+}
+	SetCameraBehindPlayer(playerid);
+	SetPlayerSkin(playerid, pInfo[playerid][aSkin]);
+	SetPlayerPos(playerid,1731.6007,-1872.7275,2929.3860);
+	SetPlayerFacingAngle(playerid, 264.7458);
+	SetPlayerInterior(playerid,0);
+	SetPlayerVirtualWorld(playerid, 0);// Виртуальный мир
+	
+	return true;
+}
+
+
+stock RegisterSkinPlayer(playerid)
+{
+	//TogglePlayerSpectating(playerid, 0);
+	SetPlayerVirtualWorld(playerid, playerid+1);
+	SetPlayerPos(playerid ,1731.7953, -1884.1201, 2927.6860);
+    SetPlayerFacingAngle(playerid, 306.4568);
+	SetPlayerCameraPos(playerid,1734.8686, -1881.5043, 2928.3269);
+	SetPlayerCameraLookAt(playerid, 1730.8080, -1884.5043, 2928.3269);
+	
+	RegisterSkin[playerid][0] = CreatePlayerTextDraw(playerid, 220.500000, 382.812500, "ld_beat:left");
+	PlayerTextDrawLetterSize(playerid, RegisterSkin[playerid][0], 0.000000, 0.000000);
+	PlayerTextDrawTextSize(playerid, RegisterSkin[playerid][0], 55.500000, 15.312500);
+	PlayerTextDrawAlignment(playerid, RegisterSkin[playerid][0], 1);
+	PlayerTextDrawColor(playerid, RegisterSkin[playerid][0], -1);
+	PlayerTextDrawSetShadow(playerid, RegisterSkin[playerid][0], 0);
+	PlayerTextDrawSetOutline(playerid, RegisterSkin[playerid][0], 0);
+	PlayerTextDrawFont(playerid, RegisterSkin[playerid][0], 4);
+	PlayerTextDrawSetSelectable(playerid, RegisterSkin[playerid][0], true);
+
+	RegisterSkin[playerid][1] = CreatePlayerTextDraw(playerid, 356.000000, 383.250000, "ld_beat:right");
+	PlayerTextDrawLetterSize(playerid, RegisterSkin[playerid][1], 0.000000, 0.000000);
+	PlayerTextDrawTextSize(playerid, RegisterSkin[playerid][1], 59.000000, 14.000000);
+	PlayerTextDrawAlignment(playerid, RegisterSkin[playerid][1], 1);
+	PlayerTextDrawColor(playerid, RegisterSkin[playerid][1], -1);
+	PlayerTextDrawSetShadow(playerid, RegisterSkin[playerid][1], 0);
+	PlayerTextDrawSetOutline(playerid, RegisterSkin[playerid][1], 0);
+	PlayerTextDrawFont(playerid, RegisterSkin[playerid][1], 4);
+	PlayerTextDrawSetSelectable(playerid, RegisterSkin[playerid][1], true);
+
+	RegisterSkin[playerid][2] = CreatePlayerTextDraw(playerid, 285.500000, 382.375000, "Enter");
+	PlayerTextDrawLetterSize(playerid, RegisterSkin[playerid][2], 0.449999, 1.600000);
+	PlayerTextDrawTextSize(playerid, RegisterSkin[playerid][2], 347.000000, 19.250000);
+	PlayerTextDrawAlignment(playerid, RegisterSkin[playerid][2], 1);
+	PlayerTextDrawColor(playerid, RegisterSkin[playerid][2], -1);
+	PlayerTextDrawUseBox(playerid, RegisterSkin[playerid][2], false);
+	PlayerTextDrawBoxColor(playerid, RegisterSkin[playerid][2], 255);
+	PlayerTextDrawSetShadow(playerid, RegisterSkin[playerid][2], 0);
+	PlayerTextDrawSetOutline(playerid, RegisterSkin[playerid][2], 1);
+	PlayerTextDrawBackgroundColor(playerid, RegisterSkin[playerid][2], 51);
+	PlayerTextDrawFont(playerid, RegisterSkin[playerid][2], 2);
+	PlayerTextDrawSetProportional(playerid, RegisterSkin[playerid][2], 1);
+	PlayerTextDrawSetSelectable(playerid, RegisterSkin[playerid][2], true);
+
+	RegisterSkin[playerid][3] = CreatePlayerTextDraw(playerid, 415.000000, 409.687500, "usebox");
+	PlayerTextDrawLetterSize(playerid, RegisterSkin[playerid][3], 0.000000, -4.400000);
+	PlayerTextDrawTextSize(playerid, RegisterSkin[playerid][3], 217.500000, 0.000000);
+	PlayerTextDrawAlignment(playerid, RegisterSkin[playerid][3], 1);
+	PlayerTextDrawColor(playerid, RegisterSkin[playerid][3], 0);
+	PlayerTextDrawUseBox(playerid, RegisterSkin[playerid][3], true);
+	PlayerTextDrawBoxColor(playerid, RegisterSkin[playerid][3], 102);
+	PlayerTextDrawSetShadow(playerid, RegisterSkin[playerid][3], 0);
+	PlayerTextDrawSetOutline(playerid, RegisterSkin[playerid][3], 0);
+	PlayerTextDrawFont(playerid, RegisterSkin[playerid][3], 0);
+	
+	RegisterSkin[playerid][4] = CreatePlayerTextDraw(playerid, 235.500000, 136.500000, ".");
+	PlayerTextDrawLetterSize(playerid, RegisterSkin[playerid][4], -0.002500, -0.416876);
+	PlayerTextDrawTextSize(playerid, RegisterSkin[playerid][4], 120.500000, 187.687500);
+	PlayerTextDrawAlignment(playerid, RegisterSkin[playerid][4], 1);
+	PlayerTextDrawBackgroundColor(playerid, RegisterSkin[playerid][4], 0xFFFFFF00); 
+	PlayerTextDrawColor(playerid, RegisterSkin[playerid][4], -1);
+	PlayerTextDrawUseBox(playerid, RegisterSkin[playerid][4], false);
+	PlayerTextDrawBoxColor(playerid, RegisterSkin[playerid][4], 102);
+	PlayerTextDrawSetShadow(playerid, RegisterSkin[playerid][4], 0);
+	PlayerTextDrawSetOutline(playerid, RegisterSkin[playerid][4], 0);
+	PlayerTextDrawFont(playerid, RegisterSkin[playerid][4], 5);
+	PlayerTextDrawSetPreviewModel(playerid, RegisterSkin[playerid][4], 177);
+	PlayerTextDrawSetPreviewRot(playerid, RegisterSkin[playerid][4], 0.000000, 0.000000, 0.000000, 0.855000);
+
+
+
+	SelectTextDraw(playerid, 0x00FF00FF);
+	
+	PlayerTextDrawShow(playerid, RegisterSkin[playerid][0]);
+	PlayerTextDrawShow(playerid, RegisterSkin[playerid][1]);
+	PlayerTextDrawShow(playerid, RegisterSkin[playerid][2]);
+	PlayerTextDrawShow(playerid, RegisterSkin[playerid][3]);
+	PlayerTextDrawShow(playerid, RegisterSkin[playerid][4]);
+	
+	if(pInfo[playerid][aSex] == 1)
+	{
+		ChangeSkinReg[playerid] = 1;
+		ShowMailSkins(playerid, ChangeSkinReg[playerid]);
+	}
+	else
+	{
+		ChangeSkinReg[playerid] = 1;
+		ShowGirlSkins(playerid, ChangeSkinReg[playerid]);
+	}
+	return true;
+}
+
+stock ShowMailSkins(playerid, skins)
+{
+	new mskin;
+	if(pInfo[playerid][aColor] == 1)
+	{
+		switch(skins)
+		{
+			case 1: { PlayerTextDrawSetPreviewModel(playerid, RegisterSkin[playerid][4], MailSkins[1][skins]); PlayerTextDrawShow(playerid, RegisterSkin[playerid][4]); mskin = MailSkins[1][skins]; }
+			case 2: { PlayerTextDrawSetPreviewModel(playerid, RegisterSkin[playerid][4], MailSkins[1][skins]); PlayerTextDrawShow(playerid, RegisterSkin[playerid][4]); mskin = MailSkins[1][skins]; }
+			case 3: { PlayerTextDrawSetPreviewModel(playerid, RegisterSkin[playerid][4], MailSkins[1][skins]); PlayerTextDrawShow(playerid, RegisterSkin[playerid][4]); mskin = MailSkins[1][skins]; }
+			case 4: { PlayerTextDrawSetPreviewModel(playerid, RegisterSkin[playerid][4], MailSkins[1][skins]); PlayerTextDrawShow(playerid, RegisterSkin[playerid][4]); mskin = MailSkins[1][skins]; }
+			
+		}
+	}
+	else
+	{
+		switch(skins)
+		{
+			case 1: { PlayerTextDrawSetPreviewModel(playerid, RegisterSkin[playerid][4], MailSkins[2][skins]); PlayerTextDrawShow(playerid, RegisterSkin[playerid][4]); mskin = MailSkins[2][skins]; }
+			case 2: { PlayerTextDrawSetPreviewModel(playerid, RegisterSkin[playerid][4], MailSkins[2][skins]); PlayerTextDrawShow(playerid, RegisterSkin[playerid][4]); mskin = MailSkins[2][skins]; }
+			case 3: { PlayerTextDrawSetPreviewModel(playerid, RegisterSkin[playerid][4], MailSkins[2][skins]); PlayerTextDrawShow(playerid, RegisterSkin[playerid][4]); mskin = MailSkins[2][skins]; }
+			case 4: { PlayerTextDrawSetPreviewModel(playerid, RegisterSkin[playerid][4], MailSkins[2][skins]); PlayerTextDrawShow(playerid, RegisterSkin[playerid][4]); mskin = MailSkins[2][skins]; }
+			
+		}
+	}
+	return mskin;
+}
+
+stock ShowGirlSkins(playerid, skins)
+{
+	new gskin;
+	if(pInfo[playerid][aColor] == 1)
+	{
+		switch(skins)
+		{
+			case 1: { PlayerTextDrawSetPreviewModel(playerid, RegisterSkin[playerid][4], GirlSkins[1][skins]); PlayerTextDrawShow(playerid, RegisterSkin[playerid][4]); gskin = GirlSkins[1][skins]; }
+			case 2: { PlayerTextDrawSetPreviewModel(playerid, RegisterSkin[playerid][4], GirlSkins[1][skins]); PlayerTextDrawShow(playerid, RegisterSkin[playerid][4]); gskin = GirlSkins[1][skins]; }
+		}
+	}
+	else
+	{
+		switch(skins)
+		{
+			case 1: { PlayerTextDrawSetPreviewModel(playerid, RegisterSkin[playerid][4], GirlSkins[2][skins]); PlayerTextDrawShow(playerid, RegisterSkin[playerid][4]); gskin = GirlSkins[2][skins]; }
+			case 2: { PlayerTextDrawSetPreviewModel(playerid, RegisterSkin[playerid][4], GirlSkins[2][skins]); PlayerTextDrawShow(playerid, RegisterSkin[playerid][4]); gskin = GirlSkins[2][skins]; }
+			 
+		}
+	}
+	return gskin;
+}
+
+stock SaveAccount(playerid)
+{
+	new query[1024] = "UPDATE `accounts` SET"; 
+	
+	format(query, sizeof(query), "%s `Sex` = '%d',", query, pInfo[playerid][aSex]);
+	format(query, sizeof(query), "%s `Color` = '%d',", query, pInfo[playerid][aColor]);
+	format(query, sizeof(query), "%s `Skin` = '%d',", query, pInfo[playerid][aSkin]);
+	format(query, sizeof(query), "%s `Level` = '%d',", query, pInfo[playerid][aLevel]);
+	format(query, sizeof(query), "%s `Exp` = '%d',", query, pInfo[playerid][aExp]);
+	format(query, sizeof(query), "%s `Money` = '%d',", query, pInfo[playerid][aMoney]);
+	format(query, sizeof(query), "%s `HouseKey` = '%d'", query, pInfo[playerid][aHouseKey]);
+	
+	format(query, sizeof(query), "%s WHERE `Name` = '%s'", query, pInfo[playerid][aName]);
+	mysql_function_query(mysql_connect_ID, query, false, "", "");
+	
+	return true;
+}
+
+
+stock CreateVehicleGame()
+{
+	//Spawn мопеды
+	SpawnCars[0] = AddStaticVehicleEx(462, 1804.6999, -1930, 13.1000, 90, 1, 1, 120);
+	AddStaticVehicleEx(462, 1805, -1919.4000, 13.1000, 90, 1, 1, 120);
+	AddStaticVehicleEx(462, 1805, -1921.9000, 13.1000, 90, 1, 1, 120);
+	AddStaticVehicleEx(462, 1805, -1924.5999, 13.1000, 90, 1, 1, 120);
+	SpawnCars[1] = AddStaticVehicleEx(462, 1805, -1927.2998, 13.1000, 90, 1, 1, 120);
+	return true;
+}
+
+stock CheckEnterCar(playerid, carid)
+{
+	if(carid >= SpawnCars[0] && carid <= SpawnCars[1])
+	{
+		if(pInfo[playerid][aLevel] != 1)
+		{
+			SendClientMessage(playerid, COLOR_GREY, "Только для 1 лвл.");
+			RemovePlayerFromVehicle(playerid);
+		}
+	}
+	return true;
+}
+
+stock PickupsCreate()
+{
+	heart[0] = CreatePickup(1240, 23, 1750.5999,-1876.8000,2927.6999, -1); // spawn
+	heart[1] = CreatePickup(1240, 23, 1495.6332,-31.6639,1003.6851, -1); // meria
+	heart[2] = CreatePickup(1240, 23, 1495.9520,-14.2383,1003.6859, -1); // meria
+	
+	spawnin = CreatePickup(1318, 23, 1752.5,-1894.1999,13.6000, -1); // спавн вход
+	spawnout = CreatePickup(1318, 23, 1742.5999,-1897.8000,2927.6999, -1); // спавн выход
+	
+	SpawnBuyCar = CreatePickup(1239, 2, 1793.9786,-1931.9843,13.3867, -1); // покупка мопедов на респе
+	
+	givepass = CreatePickup(1239, 2, 1510.5640,-24.9935,1007.1489, -1); // получение пасспорта
+	
+	meria[0] = CreatePickup(1318, 23, 1481.0825,-1772.3136,18.7958, -1); // Вход в мэрию
+	meria[1] = CreatePickup(1318, 23, 1485.5443,-25.3233,1003.6852, -1); // Выход из мэрии
+	meria[2] = CreatePickup(1318, 23, 1485.5475,-20.8708,1003.6852, -1); // Выход из мэрии
+	meria[3] = CreatePickup(1318, 23, 1525.5998,-31.1240,1003.7000, -1); // Задний двор выход
+	meria[4] = CreatePickup(1318, 23, 1413.2115,-1790.3461,15.4356, -1); // Задний двор вход
+	meria[5] = CreatePickup(1318, 23, 1511.1863,-14.2002,1003.6862, -1); // Вход на крышу
+	meria[6] = CreatePickup(1318, 23, 1464.6426,-1776.4731,33.4297, -1); // Выход с крыши
+	
+	buyhouse = CreatePickup(1273, 2, 1510.5645,-21.7793,1007.1489, -1); // покупка\продажа дома
+	
+	printf("Пикапы созданы.");
+	return true;
+}
+
+stock CheckNextLevel(playerid)
+{
+	new string[144];
+	new expamount = ( pInfo[playerid][aLevel] + 1) * 4;
+	if(pInfo[playerid][aExp] >= expamount)
+	{
+		pInfo[playerid][aLevel] ++;
+		pInfo[playerid][aExp] -= expamount;
+		SetPlayerScore(playerid, pInfo[playerid][aLevel]);
+		format(string, sizeof(string), "Поздравляю! Вы достигли %d-го уровня!", pInfo[playerid][aLevel]);
+		SendClientMessage(playerid, COLOR_WHITE, string);
+	}
+	return true;
+}
+
+stock ReloadPlayerMoney(playerid)
+{
+	ResetPlayerMoney(playerid);
+	GivePlayerMoney(playerid, pInfo[playerid][aMoney]);
+	return true;
+}
+
+stock ReceivingPassport(playerid, pstate)
+{
+	switch(pstate)
+	{
+		case 1: ShowPlayerDialog(playerid, DIALOG_PASSPORTS, DIALOG_STYLE_LIST, "[1/3] Выберете пол", "Мужчина\nЖенщина", "Далее", "Выход");
+		case 2: ShowPlayerDialog(playerid, DIALOG_PASSPORTS, DIALOG_STYLE_INPUT, "[2/3] Дата рождения", "{FFFFFF}Введите дату вашего рождения\nПример: 2/5/1992", "Готово", "Назад");
+	}
+	return true;
+}
+
+stock GetMonthDays(year, month)
+{
+	switch(month)
+	{
+	    case 0:     return 31;
+	    case 1: 	return 31;
+	    case 2: 	return februarydays(year);
+	    case 3: 	return 31;
+	    case 4: 	return 30;
+	    case 5: 	return 31;
+	    case 6: 	return 30;
+	    case 7: 	return 31;
+	    case 8: 	return 31;
+	    case 9: 	return 30;
+	    case 10: 	return 31;
+	    case 11: 	return 30;
+	    case 12: 	return 31;
+	    default: 	return -1;
+	}
+	return -1;
+}
+
+stock februarydays(year)
+{
+	if(!(year % 4)) return 29;
+	else return 28;
+}
+
+stock CityName(city)
+{
+	new Name[13];
+	switch(city)
+	{
+	    case 1: Name = "Los Santos";
+	    case 2: Name = "San Fiero";
+	    case 3: Name = "Las Venturas";
+	    default: Name = "San Fiero";
+	}
+	return Name;
+}
+
+stock OnRegPass(playerid)
+{
+	new string[250];
+	format(string, sizeof(string), "INSERT INTO `Passports` (`Name`,`Seria`,`Number`,`Sex`,`D_Day`,`D_Month`,`D_Year`,`DB_Day`,`DB_Month`,`DB_Year`,`City`,`McState`) VALUE ('%s','%d','%d','%d','%d','%d','%d','%d','%d','%d','%d','-1')",
+	PlayerName(playerid),
+	PassInfo[playerid][psSeria],
+	PassInfo[playerid][psNumber],
+	PassInfo[playerid][psSex],
+	PassInfo[playerid][psDate][0],
+	PassInfo[playerid][psDate][1],
+	PassInfo[playerid][psDate][2],
+	PassInfo[playerid][psDateBirth][0],
+	PassInfo[playerid][psDateBirth][1],
+	PassInfo[playerid][psDateBirth][2],
+	PassInfo[playerid][psCity]);
+	mysql_function_query(mysql_connect_ID, string, false, "", "");
+	
+	Passport[playerid] = true;
+	return true;
+}
+
+stock ProxDetectorS(Float:radi, playerid, targetid, spec = 0)
+{
+    new Float:p[3];
+    if(!IsPlayerConnected(playerid)) return false;
+    if(!IsPlayerConnected(targetid)) return false;
+    if(!spec)
+    {
+	    if(GetPlayerState(playerid) == 9) return false;
+	    if(GetPlayerState(targetid) == 9) return false;
+    }
+    if(!GetPlayerPos(targetid, p[0], p[1], p[2])) return false;
+	if(!IsPlayerInRangeOfPoint(playerid, radi, p[0], p[1], p[2]))
+	{
+		return false;
+	}
+	return true;
+}
+
+stock A_CreateMapIcon(Float:X, Float:Y, Float:Z, style)
+{
+	CreateDynamicMapIcon(X, Y, Z, style, 0, -1, -1, -1, 1500.0);
+	return true;
+}
+//=====================[Functions]
+
+function CheckPass(playerid)
+{
+	new rows, fields;
+	cache_get_data(rows, fields);
+	if(!rows)
+	{
+		return Passport[playerid] = false;
+	}
+	new buffer[68];
+	cache_get_field_content(0, "Seria", buffer),		PassInfo[playerid][psSeria] = strval(buffer);
+	cache_get_field_content(0, "Number", buffer),		PassInfo[playerid][psNumber] = strval(buffer);
+	cache_get_field_content(0, "Sex", buffer),			PassInfo[playerid][psSex] = strval(buffer);
+	cache_get_field_content(0, "D_Day", buffer),		PassInfo[playerid][psDate][0] = strval(buffer);
+	cache_get_field_content(0, "D_Month", buffer),		PassInfo[playerid][psDate][1] = strval(buffer);
+	cache_get_field_content(0, "D_Year", buffer),		PassInfo[playerid][psDate][2] = strval(buffer);
+	cache_get_field_content(0, "DB_Day", buffer),		PassInfo[playerid][psDateBirth][0] = strval(buffer);
+	cache_get_field_content(0, "DB_Month", buffer),		PassInfo[playerid][psDateBirth][1] = strval(buffer);
+	cache_get_field_content(0, "DB_Year", buffer),		PassInfo[playerid][psDateBirth][2] = strval(buffer);
+	cache_get_field_content(0, "City", buffer),			PassInfo[playerid][psCity] = strval(buffer);
+		
+	Passport[playerid] = true;
+	return true;
+}
+
+function PLKick(playerid)
+{
+	Kick(playerid);
+	return true;
+}
+
+function LoginPlayer(playerid, password[])
+{
+	new rows, fields;
+	new buffer[68];
+	cache_get_data(rows, fields);
+	cache_get_field_content(0, "Password", buffer);
+	
+	if(!strcmp(buffer, password))
+	{
+		cache_get_field_content(0, "Name", buffer),			strmid(pInfo[playerid][aName], buffer, 0, strlen(buffer), 24);
+		cache_get_field_content(0, "Sex", buffer),			pInfo[playerid][aSex] = strval(buffer);
+		cache_get_field_content(0, "Color", buffer),		pInfo[playerid][aColor] = strval(buffer);
+		cache_get_field_content(0, "Skin", buffer),			pInfo[playerid][aSkin] = strval(buffer);
+		cache_get_field_content(0, "Level", buffer),		pInfo[playerid][aLevel] = strval(buffer);
+		cache_get_field_content(0, "Exp", buffer),			pInfo[playerid][aExp] = strval(buffer);
+		cache_get_field_content(0, "Money", buffer),		pInfo[playerid][aMoney] = strval(buffer);
+		cache_get_field_content(0, "HouseKey", buffer),		pInfo[playerid][aHouseKey] = strval(buffer);
+		
+		KillTimer(supercam[playerid]);
+		TogglePlayerSpectating(playerid, false);
+		PlayerTimer[playerid] = SetTimerEx("TimeOnServer", 1000, 1, "i", playerid);
+		Logged[playerid] = true;
+		ReloadPlayerMoney(playerid);
+		SetPlayerScore(playerid, pInfo[playerid][aLevel]);
+		
+		new string[100];
+		format(string, sizeof(string), "SELECT * FROM `Passports` WHERE `Name` = '%s'", PlayerName(playerid));
+		mysql_function_query(mysql_connect_ID, string, true, "CheckPass","i", playerid); 
+		
+		SpawnPlayer(playerid);
+		
+	}
+	else return ShowLoginDialog(playerid);
+	return true;
+}
+
+function FindPlayerInTable(playerid) 
+{
+	new rows, fields;
+	cache_get_data(rows, fields);
+	if(!rows)
+	{
+		if(!IsRPNick(PlayerName(playerid)))
+		{
+			RenameTimer[playerid] = SetTimerEx("KickName", 180000, false, "i", playerid);
+			SendClientMessage(playerid, COLOR_GREY, "Ваш ник не соответствует правилам сервера. Смените его. У вас есть 180 секунд на это.");
+			ShowPlayerDialog(playerid, DIALOG_RENAME, DIALOG_STYLE_INPUT, "Введите новый ник","{FFFFFF}Ваш ник не соответствует правилам сервера\nВведите новый ник в окошко и нажмите {9ACD32}Далее\nПример: {9ACD32}Carl_Johnson","Далее","Выход");
+		}
+		else
+		{
+			pInfo[playerid][aName] = PlayerName(playerid);
+			RegisterState[playerid] ++;
+			ShowRegisterDialog(playerid, RegisterState[playerid]);
+		}
+	}
+	else
+	{
+		ShowLoginDialog(playerid);
+	}
+	return true;
+}
+
+
+function KickName(playerid)
+{
+	a_Kick(playerid, "Смена ника");
+	return true;
+}
+
+function ActionCamera(playerid) 
+{ 
+	if(Camera[playerid] == 1) 
+	{ 
+		SetPlayerCameraPos(playerid,CameraX[playerid], -1324.0, 287.2); 
+        SetPlayerCameraLookAt(playerid,1374.5, -1291.1, 239.0); 
+		CameraX[playerid]+= 0.5; 
+		if(CameraX[playerid] == 1700.0) 
+		{ 
+			SetPlayerCameraPos(playerid,CameraX[playerid], CameraY[playerid], 287.2); 
+			SetPlayerCameraLookAt(playerid,1374.5, -1291.1, 239.0); 
+			CameraY[playerid]+= 0.5; 
+		} 
+		if(CameraX[playerid] >= 2400.0) 
+		{ 
+			CameraZ[playerid] = 287.2; 
+			Camera[playerid] = 2; 
+		} 
+	} 
+	else if(Camera[playerid] == 2) 
+	{ 
+		SetPlayerCameraPos(playerid,CameraX[playerid], CameraY[playerid], 287.2); 
+		SetPlayerCameraLookAt(playerid,1374.5, -1291.1, 239.0); 
+		CameraY[playerid]+= 0.5; 
+        if(CameraY[playerid] >= -724.0) 
+		{ 
+			CameraZ[playerid] = 287.2; 
+            Camera[playerid] = 3; 
+		} 
+	} 
+    else if(Camera[playerid] == 3) 
+	{ 
+		SetPlayerCameraPos(playerid,CameraX[playerid], CameraY[playerid], 287.2); 
+        SetPlayerCameraLookAt(playerid,1374.5, -1291.1, 239.0); 
+        CameraX[playerid]-= 0.5; 
+        if(CameraX[playerid] <= 850.0) 
+        { 
+			Camera[playerid] = 4; 
+		} 
+	} 
+	else if(Camera[playerid] == 4) 
+	{ 
+		SetPlayerCameraPos(playerid,CameraX[playerid], CameraY[playerid], CameraZ[playerid]); 
+        SetPlayerCameraLookAt(playerid,1374.5, -1291.1, 239.0); 
+        CameraY[playerid]-= 0.5; 
+        if(CameraY[playerid] <= -1224.0) 
+        { 
+			CameraX[playerid] = 1460.0; 
+            CameraY[playerid] = -1324.0; 
+            CameraZ[playerid] = 287.2; 
+            CameraZ[playerid] = 287.2; 
+            Camera[playerid] = 0; 
+		} 
+	} 
+	else 
+	{ 
+		Camera[playerid] = 0; 
+	} 
+    return 1; 
+}
+
+function CheckName(playerid, name[])
+{
+	new rows, fields;
+	cache_get_data(rows, fields);
+	if(!rows)
+	{
+		SendClientMessage(playerid, COLOR_GREEN, "Вы успешно сменили ник, после регистрации вам рекомендованно перезайти на сервер с новым ником");
+		KillTimer(RenameTimer[playerid]);
+		strmid(pInfo[playerid][aName], name, 0, strlen(name), 24);
+		RegisterState[playerid] ++;
+		return ShowRegisterDialog(playerid,RegisterState[playerid]);
+	}
+	else
+	{
+		SendClientMessage(playerid, COLOR_GREY, "Данный ник занят.");
+		ShowPlayerDialog(playerid, DIALOG_RENAME, DIALOG_STYLE_INPUT, "Введите новый ник","{FFFFFF}Ваш ник не соответствует правилам сервера\nВведите новый ник в окошко и нажмите {9ACD32}Далее\nПример: {9ACD32}Carl_Johnson","Далее","Выход");
+	}
+	return 1;
+}
+
+function TimeOnServer(playerid)
+{
+	Timer[playerid][tSecond] ++;
+	if(Timer[playerid][tSecond] >= 60)
+	{
+		Timer[playerid][tMinute] ++;
+		Timer[playerid][tSecond] = 0;
+		
+		if(MopedTime[playerid] >= 1 && BuyMoped[playerid] == true)
+		{
+			MopedTime[playerid] --;
+			if(MopedTime[playerid] == 0)
+			{
+				SendClientMessage(playerid, COLOR_GREY, "Срок аренды мопеда истек");
+				DestroyVehicle(MopedPlayer[playerid]);
+				BuyMoped[playerid] = false;
+				
+			}
+		}
+	}
+	if(Timer[playerid][tMinute] >= 60)
+	{
+		Timer[playerid][tHour] ++;
+		Timer[playerid][tMinute] = 0;
+	}
+	return true;
+}
+
+function ProxDetector(Float:radi, playerid, string[],col1,col2,col3,col4,col5)
+{
+	if(IsPlayerConnected(playerid))
+	{
+		new Float:posx, Float:posy, Float:posz;
+		new Float:oldposx, Float:oldposy, Float:oldposz;
+		new Float:tempposx, Float:tempposy, Float:tempposz;
+		GetPlayerPos(playerid, oldposx, oldposy, oldposz);
+		//radi = 2.0; //Trigger Radius
+		foreach(Player,i)
+		{
+			if(IsPlayerConnected(i))
+			{
+				if(GetPlayerVirtualWorld(playerid) == GetPlayerVirtualWorld(i))
+				{
+					GetPlayerPos(i, posx, posy, posz);
+					tempposx = (oldposx -posx);
+					tempposy = (oldposy -posy);
+					tempposz = (oldposz -posz);
+					//printf("DEBUG: X:%f Y:%f Z:%f",posx,posy,posz);
+					if (((tempposx < radi/16) && (tempposx > -radi/16)) && ((tempposy < radi/16) && (tempposy > -radi/16)) && ((tempposz < radi/16) && (tempposz > -radi/16))) SendClientMessage(i, col1, string);
+					else if (((tempposx < radi/8) && (tempposx > -radi/8)) && ((tempposy < radi/8) && (tempposy > -radi/8)) && ((tempposz < radi/8) && (tempposz > -radi/8))) SendClientMessage(i, col2, string);
+					else if (((tempposx < radi/4) && (tempposx > -radi/4)) && ((tempposy < radi/4) && (tempposy > -radi/4)) && ((tempposz < radi/4) && (tempposz > -radi/4))) SendClientMessage(i, col3, string);
+					else if (((tempposx < radi/2) && (tempposx > -radi/2)) && ((tempposy < radi/2) && (tempposy > -radi/2)) && ((tempposz < radi/2) && (tempposz > -radi/2))) SendClientMessage(i, col4, string);
+					else if (((tempposx < radi) && (tempposx > -radi)) && ((tempposy < radi) && (tempposy > -radi)) && ((tempposz < radi) && (tempposz > -radi))) SendClientMessage(i, col5, string);
+				}
+				else SendClientMessage(i, col1, string);
+			}
+		}
+	}//not connected
+	return true;
+}
+
+function PayDay()
+{
+	foreach(Player,i)
+	{
+		if(Logged[i])
+		{
+			pInfo[i][aExp] ++;
+			CheckNextLevel(i);
+		}
+	}
+	return true;
+}
+
+
+function HouseLoad() 
+{ 
+    LoadAllHouse = 0; 
+    new rows, fields, time = GetTickCount(); 
+    cache_get_data(rows, fields); 
+    for(new i = 0; i < rows; i++) 
+    { 
+        hInfo[i][hID] = cache_get_field_content_int(i, "id", mysql_connect_ID); 
+        cache_get_field_content(i, "name", hInfo[i][hName], mysql_connect_ID, 24); 
+        hInfo[i][hCuplen] = cache_get_field_content_int(i, "cuplen", mysql_connect_ID); 
+        hInfo[i][hPosV][0] = cache_get_field_content_float(i, "pos1", mysql_connect_ID); 
+        hInfo[i][hPosV][1] = cache_get_field_content_float(i, "pos2", mysql_connect_ID); 
+        hInfo[i][hPosV][2] = cache_get_field_content_float(i, "pos3", mysql_connect_ID); 
+        hInfo[i][hPosE][0] = cache_get_field_content_float(i, "pose1", mysql_connect_ID); 
+        hInfo[i][hPosE][1] = cache_get_field_content_float(i, "pose2", mysql_connect_ID); 
+        hInfo[i][hPosE][2] = cache_get_field_content_float(i, "pose3", mysql_connect_ID); 
+        hInfo[i][hPosVe][0] = cache_get_field_content_float(i, "poscar1", mysql_connect_ID); 
+        hInfo[i][hPosVe][1] = cache_get_field_content_float(i, "poscar2", mysql_connect_ID); 
+        hInfo[i][hPosVe][2] = cache_get_field_content_float(i, "poscar3", mysql_connect_ID); 
+        hInfo[i][hPosVe][3] = cache_get_field_content_float(i, "poscar4", mysql_connect_ID); 
+        hInfo[i][hCena] = cache_get_field_content_int(i, "cena", mysql_connect_ID); 
+        hInfo[i][hLock] = cache_get_field_content_int(i, "lock", mysql_connect_ID); 
+        hInfo[i][hClass] = cache_get_field_content_int(i, "class", mysql_connect_ID); 
+        hInfo[i][hInt] = cache_get_field_content_int(i, "int", mysql_connect_ID); 
+        LoadAllHouse++; 
+         
+        new string[190], clas[13]; 
+        switch(hInfo[i][hClass]) 
+        { 
+			case 0: clas = "Эконом класс";
+			case 1: clas = "Бизнес класс";
+            case 2: clas = "Элитный";
+            case 3: clas = "VIP";  
+        } 
+        format(string, 190, "Номер дома: %d\nКласс дома: %s\nВладелец: %s\nЦена дома: %d$", i, clas, hInfo[i][hName], hInfo[i][hCena]); 
+         
+        if(hInfo[i][hCuplen] == 0) 
+        { 
+			hInfo[i][hPicka] = CreatePickup(19471, 1, hInfo[i][hPosV][0], hInfo[i][hPosV][1], hInfo[i][hPosV][2], -1); 
+			hInfo[i][hText] = Create3DTextLabel(string,-1,hInfo[i][hPosV][0], hInfo[i][hPosV][1], hInfo[i][hPosV][2],10.0,0); 
+			hInfo[i][hIcons] = A_CreateMapIcon(hInfo[i][hPosV][0], hInfo[i][hPosV][1], hInfo[i][hPosV][2], 31);
+        } 
+        else 
+        { 
+			hInfo[i][hPicka] = CreatePickup(1272, 1, hInfo[i][hPosV][0], hInfo[i][hPosV][1], hInfo[i][hPosV][2], -1); 
+			hInfo[i][hText] = Create3DTextLabel(string,COLOR_GREY,hInfo[i][hPosV][0], hInfo[i][hPosV][1], hInfo[i][hPosV][2],10.0,0);
+			hInfo[i][hIcons] = A_CreateMapIcon(hInfo[i][hPosV][0], hInfo[i][hPosV][1], hInfo[i][hPosV][2], 32);	
+        } 
+    } 
+    printf("[Загружено домов]: <%i>. Время загрузки: <%i мс>",LoadAllHouse,GetTickCount()-time); 
+    return 1; 
+} 
+
+stock SaveHouse(h) 
+{ 
+	new zapros[512];
+    mysql_format(mysql_connect_ID, zapros, sizeof(zapros),"UPDATE `house` SET `name` = '%s', `cuplen` = '%d', `cena` = '%d', `lock` = '%d', `class` = '%d', `int` = '%d' WHERE `id` = '%d'", hInfo[h][hName], hInfo[h][hCuplen], hInfo[h][hCena], hInfo[h][hLock], hInfo[h][hClass], hInfo[h][hInt], hInfo[h][hID]); 
+    mysql_function_query(mysql_connect_ID, zapros, false, "", ""); 
+} 
+
+stock UpdateHouse() 
+{ 
+    for(new i; i <= LoadAllHouse; i++) 
+    {
+		DestroyDynamicMapIcon(hInfo[i][hIcons]);
+        DestroyPickup(hInfo[i][hPicka]); 
+        Delete3DTextLabel(hInfo[i][hText]); 
+         
+        new string[190], clas[13]; 
+        switch(hInfo[i][hClass]) 
+        { 
+            case 0: clas = "Эконом класс";
+            case 1: clas = "Бизнес класс";
+            case 2: clas = "Элитный";
+            case 3: clas = "VIP";
+        } 
+        format(string, 190, "Номер дома: %d\nКласс дома: %s\nВладелец: %s\nЦена дома: %d$", i, clas, hInfo[i][hName], hInfo[i][hCena]); 
+
+        if(hInfo[i][hCuplen] == 0) 
+        { 
+			hInfo[i][hPicka] = CreatePickup(19471, 1, hInfo[i][hPosV][0], hInfo[i][hPosV][1], hInfo[i][hPosV][2], -1); 
+			hInfo[i][hText] = Create3DTextLabel(string,-1,hInfo[i][hPosV][0], hInfo[i][hPosV][1], hInfo[i][hPosV][2],10.0,0); 
+			hInfo[i][hIcons] = A_CreateMapIcon(hInfo[i][hPosV][0], hInfo[i][hPosV][1], hInfo[i][hPosV][2], 31);
+        } 
+        else 
+        { 
+			hInfo[i][hPicka] = CreatePickup(1272, 1, hInfo[i][hPosV][0], hInfo[i][hPosV][1], hInfo[i][hPosV][2], -1); 
+			hInfo[i][hText] = Create3DTextLabel(string,COLOR_GREY,hInfo[i][hPosV][0], hInfo[i][hPosV][1], hInfo[i][hPosV][2],10.0,0); 
+			hInfo[i][hIcons] = A_CreateMapIcon(hInfo[i][hPosV][0], hInfo[i][hPosV][1], hInfo[i][hPosV][2], 32);
+        } 
+    } 
+}   
+
+//===================[CMD]
+
+CMD:me(playerid, params[])
+{
+	new result[100], string[150];
+	if(sscanf(params,"s[100]",result)) return SendClientMessage(playerid,COLOR_ISPOLZUY,"Используйте: /me [действие]");
+	format(string, sizeof(string), "%s[%d] %s", PlayerName(playerid), playerid, result);
+	ProxDetectorN(10, playerid, string, COLOR_PURPLE);
+	return true;
+}
+
+CMD:s(playerid, params[])
+{
+	new result[100], string[150];
+	if(sscanf(params, "s[100]", result)) return SendClientMessage(playerid, COLOR_ISPOLZUY, "Используйте: /s [текст]");
+	format(string, sizeof(string),"%s[%d] кричит: %s!!", PlayerName(playerid), playerid, result);
+	ProxDetectorN(30, playerid, string, COLOR_SCHAT);
+	if(!IsPlayerInAnyVehicle(playerid))
+	{
+		ApplyAnimation(playerid,"RIOT","RIOT_shout",4.0, 0, 1, 1, 0, 0, 1);
+	}
+	return true;
+}
+
+CMD:do(playerid, params[])
+{
+    new result[100], string[150];
+	if(sscanf(params,"s[100]",result)) return SendClientMessage(playerid,COLOR_ISPOLZUY,"Используйте: /do [действие]");
+	format(string,sizeof(string)," %s  - |  %s[%d] ",result, PlayerName(playerid),playerid);
+	ProxDetectorN(10,playerid,string,COLOR_DOCHAT);
+	return true;
+}
+
+CMD:try(playerid, params[])
+{
+    new result[100], string[150], rand = random(10);
+	if(sscanf(params,"s[100]",result)) return SendClientMessage(playerid,COLOR_ISPOLZUY,"Используйте: /try [действие]");
+	if(rand < 5)
+	{
+		format(string,sizeof(string)," %s[%d] %s -{9ACD32} Удачно ", PlayerName(playerid),playerid, result);
+	}
+	else
+	{
+	    format(string,sizeof(string)," %s[%d] %s - {FF0000} Не удачно ", PlayerName(playerid),playerid, result);
+	}
+	ProxDetectorN(10,playerid,string,COLOR_PURPLE);
+	return true;
+}
+
+CMD:menu(playerid)
+{
+	if(GetPlayerState(playerid) == 2) return SendClientMessage(playerid, COLOR_LIGHTRED, "Вы не можете открыть личное меню сидя за рулем");
+	new lvlexp[80], string[260];
+	format(lvlexp, sizeof(lvlexp), "Уровень: %d | Опыт: %d", pInfo[playerid][aLevel], pInfo[playerid][aExp]);
+	
+	strcat(string,"{454545}[1]{FFFFFF} Аккаунт\n");
+	strcat(string,"{454545}[2]{FFFFFF} Команды\n");
+	ShowPlayerDialog(playerid, DIALOG_MAINMENU, DIALOG_STYLE_LIST, lvlexp, string, "Готово", "Выход");
+	return true;
+	
+}
+CMD:mm(playerid)return cmd_menu(playerid);
+
+CMD:showpass(playerid, params[])
+{
+	if(!Passport[playerid]) return SendClientMessage(playerid, COLOR_GREY, "У вас нет паспорта. Его можно получить в мэрии.");
+	new id, str[50], allstr[330];
+	if(sscanf(params,"u",id)) return SendClientMessage(playerid, COLOR_ISPOLZUY, "Используйте: /showpass [id]");
+	if(ProxDetectorS(5.0, playerid, id))
+	{
+		strcat(allstr,"{FFFFFF}");
+		format(str,sizeof(str),"{FFFFFF}Имя: {33CCFF}%s\n",PlayerName(playerid));
+		strcat(allstr,str);
+		format(str,sizeof(str),"{FFFFFF}Дата рождения: {33CCFF}%d/%d/%d\n",PassInfo[playerid][psDateBirth][0],PassInfo[playerid][psDateBirth][1],PassInfo[playerid][psDateBirth][2]);
+		strcat(allstr,str);
+		format(str,sizeof(str),"{FFFFFF}Серия: {33CCFF}%d\n",PassInfo[playerid][psSeria]);
+		strcat(allstr,str);
+		format(str,sizeof(str),"{FFFFFF}Номер: {33CCFF}%d\n",PassInfo[playerid][psNumber]);
+		strcat(allstr,str);
+		format(str,sizeof(str),"{FFFFFF}Город: {33CCFF}%s\n",CityName(PassInfo[playerid][psCity]));
+		strcat(allstr,str);
+		format(str,sizeof(str),"{FFFFFF}Лет в штате: {33CCFF}%d\n",pInfo[playerid][aLevel]);
+		strcat(allstr,str);
+		//format(str,sizeof(str),"{AFAFAF}Законопослушность: {33CCFF}%d\n",PI[playerid][pZKP]);
+		//strcat(allstr,str);
+		
+		ShowPlayerDialog(id, INVALID_DIALOG_ID, DIALOG_STYLE_MSGBOX, "Паспорт", allstr, "Готово", "");
+		format(allstr, sizeof(allstr), "%s показывает свой паспорт %s", PlayerName(playerid), PlayerName(id));
+		ProxDetectorN(15.0, playerid, allstr, COLOR_PURPLE);
+	}
+	else SendClientMessage(playerid, COLOR_GREY, "Вы далеко от игрока");
+	return true;
+}
+
+CMD:1(playerid, params[]) 
+{ 
+SetPVarInt(playerid, "houseid", LoadAllHouse++); 
+GetPlayerPos(playerid, hInfo[GetPVarInt(playerid, "houseid")][hPosVe][0], hInfo[GetPVarInt(playerid, "houseid")][hPosVe][1], hInfo[GetPVarInt(playerid, "houseid")][hPosVe][2]), GetPlayerFacingAngle(playerid, hInfo[GetPVarInt(playerid, "houseid")][hPosVe][3]); 
+carhouse[playerid] = CreateVehicle(426, hInfo[GetPVarInt(playerid, "houseid")][hPosVe][0], hInfo[GetPVarInt(playerid, "houseid")][hPosVe][1], hInfo[GetPVarInt(playerid, "houseid")][hPosVe][2], hInfo[GetPVarInt(playerid, "houseid")][hPosVe][3], 0, 1, 60); 
+PutPlayerInVehicle(playerid, carhouse[playerid], 0); 
+SendClientMessage(playerid, -1, "Выберете место где будет спавнится авто для этого дома."); 
+SendClientMessage(playerid, -1, "Когда найдете место введите /2"); 
+return 1; 
+} 
+
+CMD:2(playerid, params[]) 
+{ 
+GetVehiclePos(carhouse[playerid], hInfo[GetPVarInt(playerid, "houseid")][hPosVe][0], hInfo[GetPVarInt(playerid, "houseid")][hPosVe][1], hInfo[GetPVarInt(playerid, "houseid")][hPosVe][2]), GetVehicleZAngle(carhouse[playerid], hInfo[GetPVarInt(playerid, "houseid")][hPosVe][3]); 
+DestroyVehicle(carhouse[playerid]); 
+SendClientMessage(playerid, -1, "Теперь подойдите к месту где будет сам дом."); 
+SendClientMessage(playerid, -1, "А там используйте /3 [Цена][Класс]"); 
+return 1; 
+} 
+
+CMD:3(playerid, params[]) 
+{ 
+GetPlayerPos(playerid, hInfo[GetPVarInt(playerid, "houseid")][hPosV][0], hInfo[GetPVarInt(playerid, "houseid")][hPosV][1], hInfo[GetPVarInt(playerid, "houseid")][hPosV][2]); 
+if(sscanf(params, "dd", hInfo[GetPVarInt(playerid, "houseid")][hCena], hInfo[GetPVarInt(playerid, "houseid")][hClass]))return SendClientMessage(playerid, -1, "Используйте: /addhouse [Цена][Класс]"); 
+RedHouse[playerid] = 1; 
+inet[playerid] = floatround(TPtoINT[tempINT[playerid]][3]); 
+SetPlayerPos(playerid, TPtoINT[tempINT[playerid]][0], TPtoINT[tempINT[playerid]][1], TPtoINT[tempINT[playerid]][2]); 
+SetPlayerInterior(playerid, inet[playerid]); 
+SetPlayerVirtualWorld(playerid, GetPVarInt(playerid, "houseid")); 
+SendClientMessage(playerid, -1, "Используйте Левый Shift и Левый Ctrl для выбора интерьера."); 
+SendClientMessage(playerid, -1, "Используйте Y что бы сохранить выбранный интерьер."); 
+return 1; 
+}
+ 
+CMD:hlock(playerid) 
+{ 
+	if(pInfo[playerid][aHouseKey] == -1) SendClientMessage(playerid, -1, "У вас нету дома!"); 
+	if(IsPlayerInRangeOfPoint(playerid,2.0,hInfo[pInfo[playerid][aHouseKey]][hPosV][0],hInfo[pInfo[playerid][aHouseKey]][hPosV][1],hInfo[pInfo[playerid][aHouseKey]][hPosV][2]) || IsPlayerInRangeOfPoint(playerid,2.0,hInfo[pInfo[playerid][aHouseKey]][hPosE][0],hInfo[pInfo[playerid][aHouseKey]][hPosE][1],hInfo[pInfo[playerid][aHouseKey]][hPosE][2])) 
+	{ 
+		switch(hInfo[pInfo[playerid][aHouseKey]][hLock]) 
+		{ 
+			case 0: hInfo[pInfo[playerid][aHouseKey]][hLock] = 1, SendClientMessage(playerid, -1, "Вы закрыли свой дом."); 
+			case 1: hInfo[pInfo[playerid][aHouseKey]][hLock] = 0, SendClientMessage(playerid, -1, "Вы открыли свой дом."); 
+		} 
+	} 
+	else SendClientMessage(playerid, -1, "Вы должны стоять рядом со своим домом!"); 
+	return 1; 
+}
+
+CMD:hmenu(playerid)
+{
+	if(pInfo[playerid][aHouseKey] == -1) return SendClientMessage(playerid, -1, "У вас нет дома!"); 
+	new string[128];
+	if(hInfo[pInfo[playerid][aHouseKey]][hLock] == 1) { strcat(string,"{454545}[1]{FFFFFF} Открыть дом\n"); }
+	else { strcat(string,"{454545}[1]{FFFFFF} Закрыть дом\n"); }
+	return ShowPlayerDialog(playerid, DIALOG_HOUSEMENU, DIALOG_STYLE_LIST, "Меню дома", string, "Готово", "Выход");
+}
+
+CMD:hm(playerid)return cmd_hmenu(playerid);
